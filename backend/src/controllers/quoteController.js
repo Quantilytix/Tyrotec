@@ -105,39 +105,30 @@ const getQuoteById = asyncHandler(async (req, res) => {
   return res.json(data);
 });
 
-// Customers convert their own quotes (source 'portal'). Staff can convert
-// *any* customer's quote on their behalf -- e.g. a customer calls in and
-// asks staff to finalize it -- which needs the quote's actual owner looked
-// up instead of assuming req.user is the customer.
+// Customer only -- converts their own submitted quote into an order via the
+// existing manual pending_approval path. Staff can no longer convert or
+// checkout a quote on a customer's behalf (that capability was deliberately
+// removed -- ordering is always the customer's own action now); staff
+// creating a quote for a customer (createQuoteForCustomerAdmin) ends with
+// handing that customer the quote to act on themselves, not placing the
+// order for them. Enforced both here (customerId is always req.user.id,
+// never resolved from the quote's actual owner) and at the route
+// (requireRole(['customer'])).
 const convertQuoteToOrder = asyncHandler(async (req, res) => {
   const { quoteId } = req.params;
-  const isStaff = ['admin', 'sales_rep'].includes(req.user.role);
+  const customerId = req.user.id;
+  const customerLabel = req.user.company_name || req.user.email;
 
-  let customerId = req.user.id;
-  let customerLabel = req.user.company_name || req.user.email;
-
-  if (isStaff) {
-    const { data: quote, error: quoteErr } = await supabase
-      .from('quotes')
-      .select('customer_id, users(email, company_name)')
-      .eq('id', quoteId)
-      .single();
-    if (quoteErr || !quote) return res.status(404).json({ error: 'Quote not found.' });
-
-    customerId = quote.customer_id;
-    customerLabel = quote.users?.company_name || quote.users?.email || customerLabel;
-  }
-
-  const result = await convertQuoteForCustomer(customerId, customerLabel, quoteId, isStaff ? 'admin' : 'portal');
+  const result = await convertQuoteForCustomer(customerId, customerLabel, quoteId, 'portal');
   if (result.error) return res.status(result.status).json({ error: result.error });
 
   await logActivity({
     actorId: req.user.id,
-    actorLabel: req.user.company_name || req.user.email,
+    actorLabel: customerLabel,
     action: 'quote.converted',
     entityType: 'order',
     entityId: result.orderId,
-    description: `${customerLabel}'s quote #${result.quoteNumber} was converted to order #${result.orderId} via ${isStaff ? 'admin' : 'the customer portal'}.`,
+    description: `${customerLabel}'s quote #${result.quoteNumber} was converted to order #${result.orderId} via the customer portal.`,
   });
 
   return res.status(201).json({ message: 'Order created successfully', ...result });

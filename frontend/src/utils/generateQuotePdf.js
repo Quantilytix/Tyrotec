@@ -22,7 +22,7 @@ import { formatCurrency } from './formatters';
 // under Terms so a customer paying by EFT has somewhere to copy them from.
 const COMPANY = {
   name: 'Tyrotech',
-  tagline: 'B2B supplier for industrial parts and supplies',
+  tagline: 'Supplier for industrial parts and supplies',
   address: '',
   phone: '',
   email: '',

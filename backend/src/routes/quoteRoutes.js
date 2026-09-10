@@ -45,7 +45,9 @@ router.patch(
   validate,
   updateQuoteStatus
 );
-router.post('/:quoteId/convert', authenticateToken, convertQuoteToOrder);
+// Customer only -- staff can no longer convert a quote to an order on a
+// customer's behalf (see convertQuoteToOrder's own comment for why).
+router.post('/:quoteId/convert', authenticateToken, requireRole(['customer']), convertQuoteToOrder);
 router.post('/:quoteId/checkout', authenticateToken, checkoutQuoteFast);
 
 module.exports = router;

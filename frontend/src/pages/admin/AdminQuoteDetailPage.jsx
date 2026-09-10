@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
-import { getQuoteById, updateQuoteStatus, convertQuoteToOrder } from '../../api/quotes';
+import { useParams, Link } from 'react-router-dom';
+import { getQuoteById, updateQuoteStatus } from '../../api/quotes';
 import { formatCurrency, formatDate } from '../../utils/formatters';
+import { downloadQuotePdf } from '../../utils/generateQuotePdf';
 import StatusBadge from '../../components/ui/StatusBadge';
 import Spinner from '../../components/ui/Spinner';
 import Button from '../../components/ui/Button';
@@ -10,11 +11,9 @@ import Card from '../../components/ui/Card';
 
 export default function AdminQuoteDetailPage() {
   const { quoteId } = useParams();
-  const navigate = useNavigate();
   const [quote, setQuote] = useState(null);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
-  const [converting, setConverting] = useState(false);
   const [error, setError] = useState('');
   const [showVoidConfirm, setShowVoidConfirm] = useState(false);
 
@@ -39,23 +38,31 @@ export default function AdminQuoteDetailPage() {
     }
   };
 
-  const handleConvert = async () => {
-    setError('');
-    setConverting(true);
-    try {
-      const { data } = await convertQuoteToOrder(quoteId);
-      navigate(`/admin/orders/${data.orderId}`);
-    } catch (err) {
-      setError(err.response?.data?.error || 'Could not convert this quote.');
-      setConverting(false);
-    }
-  };
-
   if (loading) return <Spinner />;
   if (!quote) return <p className="text-sm text-slate-500">Quote not found.</p>;
 
   const canExpire = ['draft', 'submitted'].includes(quote.status);
-  const canConvert = quote.status === 'submitted';
+
+  // Staff can no longer place this order on the customer's behalf (see
+  // convertQuoteToOrder's own comment) -- this is now how a quote actually
+  // gets to them: download the PDF and send it however staff already do
+  // (email, WhatsApp, printed for a walk-in), same document the customer's
+  // own portal generates for themselves.
+  const handleDownload = () => {
+    downloadQuotePdf({
+      items: quote.quote_items.map((item) => ({
+        name: item.products?.name,
+        sku: item.products?.sku,
+        unit_price: item.unit_price,
+        quantity: item.quantity,
+      })),
+      totalAmount: quote.total_amount,
+      customer: quote.users,
+      quoteNumber: quote.quote_number,
+      status: quote.status,
+      createdAt: quote.created_at,
+    });
+  };
 
   return (
     <div>
@@ -117,14 +124,12 @@ export default function AdminQuoteDetailPage() {
         </div>
         <div className="flex items-center gap-3">
           {error && <p className="text-sm text-bad-500">{error}</p>}
+          <Button variant="secondary" onClick={handleDownload}>
+            Download quote
+          </Button>
           {canExpire && (
             <Button variant="danger" onClick={() => setShowVoidConfirm(true)} loading={updating}>
               Void quote
-            </Button>
-          )}
-          {canConvert && (
-            <Button onClick={handleConvert} loading={converting}>
-              Convert to order
             </Button>
           )}
         </div>
