@@ -10,14 +10,14 @@ const MENU_SECTIONS = [
       { id: 'menu_view_quotes', title: '📄 My quotes', description: 'View your past and current quotes' },
       { id: 'menu_view_orders', title: '📦 My orders', description: 'View your past and current orders' },
       { id: 'menu_submit_payment', title: '💳 Submit a payment', description: 'Pay for an approved order' },
-      { id: 'menu_company_details', title: 'ℹ️ Tyrotech details', description: 'Contact info & more' },
+      { id: 'menu_company_details', title: 'ℹ️ Tyrotec details', description: 'Contact info & more' },
     ],
   },
 ];
 
 async function sendMenu(phone, greeting) {
   await sendList(phone, {
-    header: 'Tyrotech',
+    header: 'Tyrotec',
     body: greeting || 'Choose an option to get started:',
     buttonText: 'Menu',
     sections: MENU_SECTIONS,

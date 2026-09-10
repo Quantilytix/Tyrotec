@@ -14,7 +14,7 @@ export default function PrivacyPolicyPage() {
     <div className="min-h-screen bg-canvas px-4 py-12">
       <div className="mx-auto max-w-2xl rounded-2xl bg-white p-8 shadow-card sm:p-10">
         <Link to="/login" className="text-sm text-teal-600 hover:underline">
-          ← Back to Tyrotech
+          ← Back to Tyrotec
         </Link>
 
         <h1 className="mt-4 font-display text-2xl font-semibold text-ink">Privacy Policy</h1>
@@ -23,7 +23,7 @@ export default function PrivacyPolicyPage() {
         </p>
 
         <p className={P}>
-          This policy explains what personal information Tyrotech ("Tyrotech", "we", "us") collects through this
+          This policy explains what personal information Tyrotec ("Tyrotec", "we", "us") collects through this
           customer portal and WhatsApp ordering service, why we collect it, who we share it with, and the rights
           you have over it. It's written to align with South Africa's Protection of Personal Information Act, 2013
           ("POPIA"). If you're outside South Africa, similar protections generally apply under your local law.
@@ -31,7 +31,7 @@ export default function PrivacyPolicyPage() {
 
         <h2 className={H2}>1. Who this applies to</h2>
         <p className={P}>
-          This policy covers customers who register for or use the Tyrotech portal or its WhatsApp ordering
+          This policy covers customers who register for or use the Tyrotec portal or its WhatsApp ordering
           service, and staff (sales representatives and administrators) who use the portal to manage products,
           quotes, orders, and payments on our behalf.
         </p>
@@ -93,7 +93,7 @@ export default function PrivacyPolicyPage() {
         <h2 className={H2}>4. Who we share information with</h2>
         <p className={P}>
           We don't sell your personal information. We share it only with the service providers that help us run
-          Tyrotech, each acting on our instructions:
+          Tyrotec, each acting on our instructions:
         </p>
         <ul className={UL}>
           <li>
@@ -116,7 +116,7 @@ export default function PrivacyPolicyPage() {
         </ul>
         <p className={P}>
           We may also disclose information where required by law, or to protect the rights, property, or safety of
-          Tyrotech, our customers, or others.
+          Tyrotec, our customers, or others.
         </p>
 
         <h2 className={H2}>5. How long we keep it</h2>
@@ -153,13 +153,13 @@ export default function PrivacyPolicyPage() {
 
         <h2 className={H2}>9. Children's privacy</h2>
         <p className={P}>
-          Tyrotech is a business-to-business service and isn't directed at or intended for use by children.
+          Tyrotec is a business-to-business service and isn't directed at or intended for use by children.
         </p>
 
         <h2 className={H2}>10. Contact us</h2>
         <p className={P}>
           For any questions about this policy or your personal information, contact us at{' '}
-          <span className="font-medium text-ink">privacy@tyrotech.com</span>.
+          <span className="font-medium text-ink">privacy@tyrotec.co.za</span>.
         </p>
 
         <h2 className={H2}>11. Changes to this policy</h2>

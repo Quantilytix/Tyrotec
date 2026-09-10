@@ -36,8 +36,8 @@ export default function ResetPassword() {
     <div className="flex min-h-screen items-center justify-center bg-ink px-4">
       <div className="w-full max-w-sm rounded-2xl bg-white p-8 shadow-card">
         <div className="mb-8 flex items-center gap-2">
-          <img src="/jamlea.jpg" alt="Tyrotech" className="h-10 w-auto object-contain" />
-          <span className="font-display text-lg font-semibold text-ink">Tyrotech Customer Portal</span>
+          <img src="/jamlea.jpg" alt="Tyrotec" className="h-10 w-auto object-contain" />
+          <span className="font-display text-lg font-semibold text-ink">Tyrotec Customer Portal</span>
         </div>
 
         <h1 className="font-display text-xl font-semibold text-ink">Set a new password</h1>

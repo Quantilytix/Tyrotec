@@ -1,6 +1,6 @@
 # Order flow: manual approval + automated PayFast checkout
 
-Tyrotech has two ways an order can move from "just placed" to "fulfilled" —
+Tyrotec has two ways an order can move from "just placed" to "fulfilled" —
 the original manual-approval flow, and a newer automated fast-checkout path
 that sits alongside it. Both share the same `orders` table and the same
 `orders.status` column; this document is the map of what each status means

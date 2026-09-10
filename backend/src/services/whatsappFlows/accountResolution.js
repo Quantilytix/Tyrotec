@@ -36,7 +36,7 @@ async function handle(conversation, message) {
       return { newState: 'awaiting_new_account_name', newContext: {} };
     }
     await sendButtons(phone, {
-      body: "Sorry, I didn't catch that. Do you already have a Tyrotech account?",
+      body: "Sorry, I didn't catch that. Do you already have a Tyrotec account?",
       buttons: HAS_ACCOUNT_BUTTONS,
     });
     return { newState: 'awaiting_has_account', newContext: {} };
@@ -108,7 +108,7 @@ async function handle(conversation, message) {
 
     await sendText(
       phone,
-      `You're all set${name ? `, ${name}` : ''}! Your Tyrotech account is ready to use right here on WhatsApp. Want the web portal too? Visit the login page and use "Forgot password?" with ${email} to set one.`
+      `You're all set${name ? `, ${name}` : ''}! Your Tyrotec account is ready to use right here on WhatsApp. Want the web portal too? Visit the login page and use "Forgot password?" with ${email} to set one.`
     );
     return greetAndShowMenu(phone, profile);
   }
@@ -120,7 +120,7 @@ async function handle(conversation, message) {
   }
 
   await sendButtons(phone, {
-    body: '👋 Welcome to Tyrotech! Do you already have an account on our customer portal?',
+    body: '👋 Welcome to Tyrotec! Do you already have an account on our customer portal?',
     buttons: HAS_ACCOUNT_BUTTONS,
   });
   return { newState: 'awaiting_has_account', newContext: {} };

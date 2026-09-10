@@ -21,7 +21,7 @@ import { formatCurrency } from './formatters';
 // plain array of lines (e.g. bank name, account number, branch code) printed
 // under Terms so a customer paying by EFT has somewhere to copy them from.
 const COMPANY = {
-  name: 'Tyrotech',
+  name: 'Tyrotec',
   tagline: 'Supplier for industrial parts and supplies',
   address: '',
   phone: '',
@@ -61,7 +61,7 @@ function formatDocDate(isoString) {
   return new Date(isoString).toLocaleDateString('en-ZA', { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
-// "Tyrotech" -> "TT": pulls the capitals out of the brand name for a simple
+// "Tyrotec" -> "TT": pulls the capitals out of the brand name for a simple
 // text fallback if the logo image failed to load, so the header still has
 // *something* logo-shaped rather than an empty box.
 function monogram(name) {
@@ -284,7 +284,7 @@ function drawFooter(doc, pageNumber, totalPages) {
   doc.setFontSize(8);
   doc.setTextColor(...GRAY);
   doc.text(contactParts.length ? `${COMPANY.name} · ${contactParts.join(' · ')}` : COMPANY.name, MARGIN, footerY + 5);
-  doc.text(`Generated ${formatDocDate(new Date().toISOString())} via the Tyrotech Customer Portal.`, MARGIN, footerY + 9.5);
+  doc.text(`Generated ${formatDocDate(new Date().toISOString())} via the Tyrotec Customer Portal.`, MARGIN, footerY + 9.5);
   doc.text(`Page ${pageNumber} of ${totalPages}`, PAGE_WIDTH - MARGIN, footerY + 9.5, { align: 'right' });
 }
 

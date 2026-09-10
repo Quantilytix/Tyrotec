@@ -51,7 +51,7 @@ export default function Register() {
     <AuthLayout>
       <div className="rounded-2xl bg-white p-8 shadow-card">
         <div className="mb-8 flex items-center gap-2">
-          <img src="/jamlea.jpg" alt="Tyrotech" className="h-10 w-10 rounded-full object-cover" />
+          <img src="/jamlea.jpg" alt="Tyrotec" className="h-10 w-20 object-contain" />
           <span className="font-display text-lg font-semibold text-ink">Portal</span>
         </div>
 

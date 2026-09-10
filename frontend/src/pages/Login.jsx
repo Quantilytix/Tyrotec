@@ -35,8 +35,8 @@ export default function Login() {
     <AuthLayout>
       <div className="rounded-2xl bg-white p-8 shadow-card">
         <div className="mb-8 flex items-center gap-2">
-          <img src="/jamlea.jpg" alt="Tyrotech" className="h-10 w-10 rounded-full object-cover" />
-          <span className="font-display text-lg font-semibold text-ink">Tyrotech Customer Portal</span>
+          <img src="/jamlea.jpg" alt="Tyrotec" className="h-10 w-20 object-contain" />
+          <span className="font-display text-lg font-semibold text-ink">Tyrotec Customer Portal</span>
         </div>
 
         <h1 className="font-display text-xl font-semibold text-ink">Sign in</h1>

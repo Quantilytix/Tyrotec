@@ -2,7 +2,7 @@ const { sendText } = require('../../config/whatsapp');
 
 // Static reply, no backend logic -- edit this text to change what shows up.
 const DETAILS_TEXT =
-  'Tyrotech\n\nYour B2B supplier for industrial parts and supplies.\n\n' +
+  'Tyrotec\n\nYour B2B supplier for industrial parts and supplies.\n\n' +
   'Reply "menu" any time to come back to the main menu.';
 
 async function send(phone) {

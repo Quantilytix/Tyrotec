@@ -1,6 +1,6 @@
-# Tyrotech Vendor Requirements Checklist
+# Tyrotec Vendor Requirements Checklist
 
-This document lists the production credentials and configuration details the Jamlea system needs from Tyrotech for live operation. The project is already wired to expect these values in its environment configuration and webhooks.
+This document lists the production credentials and configuration details the Jamlea system needs from Tyrotec for live operation. The project is already wired to expect these values in its environment configuration and webhooks.
 
 ---
 
@@ -8,7 +8,7 @@ This document lists the production credentials and configuration details the Jam
 
 The system uses Supabase for the database, authentication, and optionally storage and RLS-based access control.
 
-Required from Tyrotech:
+Required from Tyrotec:
 
 - Supabase project URL
   - Example format: `https://xxxxx.supabase.co`
@@ -47,7 +47,7 @@ Notes:
 
 The app is configured for deployment on Render and uses public URLs for backend/frontend communication and webhook callbacks.
 
-Required from Tyrotech:
+Required from Tyrotec:
 
 - Live backend deployment URL
   - Example: `https://jamlea-backend.onrender.com`
@@ -84,7 +84,7 @@ Important webhook URLs the business must point to live Render hosts:
 
 The app uses Meta WhatsApp Cloud API for customer messaging and business notifications.
 
-Required from Tyrotech:
+Required from Tyrotec:
 
 - Meta Business Account access
 - WhatsApp Business number connected to Meta
@@ -124,7 +124,7 @@ Notes:
 
 The app sends notifications, password resets, customer updates, and internal staff emails via SMTP.
 
-Required from Tyrotech:
+Required from Tyrotec:
 
 - SMTP host
   - Example: Gmail SMTP, SendGrid, Mailgun, or their business mail provider
@@ -133,8 +133,7 @@ Required from Tyrotech:
   - `true` for SSL/TLS secure connection or `false` depending on provider
 - SMTP username
 - SMTP password or app password
-- Sender email address
-  - Example: `noreply@tyrotech.co.za` or similar
+- Sender email address: `sales@tyrotec.co.za`
 - Email domain ownership confirmation for SPF/DKIM setup if required
 - Any business email account that can send transactional mail
 
@@ -149,7 +148,7 @@ Environment variables expected by the app:
 
 Notes:
 
-- If `SMTP_FROM` is not provided, the app falls back to `SMTP_USER`.
+- Set `SMTP_FROM=sales@tyrotec.co.za`. If it is not provided, the app falls back to `SMTP_USER`.
 - This system sends operational emails like account and order notifications.
 - A proper business email domain is strongly recommended for production reliability.
 
@@ -159,7 +158,7 @@ Notes:
 
 This system integrates directly with PayFast for checkout and secure payment confirmation. The backend verifies transaction signatures and validates the ITN callback before changing order status.
 
-Required from Tyrotech:
+Required from Tyrotec:
 
 - Live PayFast merchant account access
 - PayFast merchant ID
@@ -194,9 +193,9 @@ Important notes:
 
 ---
 
-## 6) Required Vendor Information to Send to Tyrotech
+## 6) Required Vendor Information to Send to Tyrotec
 
-Please send Tyrotech this checklist in one message:
+Please send Tyrotec this checklist in one message:
 
 - Supabase project URL
 - Supabase anon key
@@ -227,13 +226,13 @@ For full live operation, the following must be working together:
 - Email SMTP provider configured for transactional emails
 - PayFast live merchant account configured with correct callback URLs
 
-Once Tyrotech provides these values, the environment variables can be entered into Render and the production app can be switched to live mode.
+Once Tyrotec provides these values, the environment variables can be entered into Render and the production app can be switched to live mode.
 
 ---
 
 ## 8) Quick Copy-and-Send Message
 
-You can send this to Tyrotech:
+You can send this to Tyrotec:
 
 > Please provide the live production credentials for the following services for the Jamlea system: Supabase project URL, Supabase anon key, Supabase service role key; Render backend URL and frontend URL; WhatsApp Business Phone Number ID, WhatsApp access token, WhatsApp app secret, and WhatsApp verify token; SMTP host, port, username, password, and sender email for business email; and PayFast merchant ID, merchant key, passphrase, and confirmation that the account is in live mode. We also need the production callback URLs for WhatsApp and PayFast, plus the business domain used for email and frontend deployment.
 

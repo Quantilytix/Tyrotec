@@ -23,7 +23,7 @@ const { formatCurrency } = require('../utils/formatCurrency');
 // plain array of lines (e.g. bank name, account number, branch code) printed
 // under Terms so a customer paying by EFT has somewhere to copy them from.
 const COMPANY = {
-  name: 'Tyrotech',
+  name: 'Tyrotec',
   tagline: 'B2B supplier for industrial parts and supplies',
   address: '',
   phone: '',
@@ -72,7 +72,7 @@ function formatDate(isoString) {
   return new Date(isoString).toLocaleDateString('en-ZA', { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
-// "Tyrotech" -> "TT": pulls the capitals out of the brand name for a simple
+// "Tyrotec" -> "TT": pulls the capitals out of the brand name for a simple
 // text fallback if the logo image failed to load, so the header still has
 // *something* logo-shaped rather than an empty box.
 function monogram(name) {
