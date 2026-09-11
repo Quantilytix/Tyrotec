@@ -85,6 +85,63 @@ Skip rows that clearly aren't product line items (blank rows, header repeats, to
 Spreadsheet data:
 `;
 
+// A supplier inventory export is already structured data -- asking an LLM to
+// turn hundreds of its rows back into JSON is slower, costs money, and can
+// exceed the model's response limit (leaving us with truncated, malformed
+// JSON). Recognise common column headings and read those files directly.
+// Gemini remains the fallback for genuinely unstructured spreadsheets.
+function normaliseHeader(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function findColumn(headers, names) {
+  return headers.findIndex((header) => names.includes(header));
+}
+
+function parseNumber(value) {
+  const cleaned = String(value ?? '')
+    .replace(/[^0-9,.-]/g, '')
+    .replace(/,/g, '');
+  const number = Number(cleaned);
+  return Number.isFinite(number) ? number : null;
+}
+
+function extractStructuredSpreadsheet(rows) {
+  if (!Array.isArray(rows) || rows.length < 2) return null;
+
+  const headers = rows[0].map(normaliseHeader);
+  const nameIndex = findColumn(headers, ['name', 'product name', 'product', 'item', 'item description', 'sales description']);
+  const skuIndex = findColumn(headers, ['sku', 'product sku', 'item code', 'item number', 'product code', 'code']);
+  const priceIndex = findColumn(headers, ['unit price', 'sales price', 'sales price rate', 'price', 'rate', 'selling price']);
+  const quantityIndex = findColumn(headers, ['quantity', 'qty', 'stock quantity', 'on hand', 'stock on hand']);
+  const categoryIndex = findColumn(headers, ['category', 'product category']);
+
+  // A name and price are the minimum unambiguous fields needed to create a
+  // usable product. Without them, hand the sheet to Gemini as before.
+  if (nameIndex < 0 || priceIndex < 0) return null;
+
+  const items = rows.slice(1).flatMap((row) => {
+    const name = String(row[nameIndex] || '').trim();
+    const unitPrice = parseNumber(row[priceIndex]);
+    if (!name || unitPrice === null) return [];
+
+    const parsedQuantity = quantityIndex >= 0 ? parseNumber(row[quantityIndex]) : null;
+    return [{
+      name,
+      sku: skuIndex >= 0 ? String(row[skuIndex] || '').trim() || null : null,
+      category: categoryIndex >= 0 ? String(row[categoryIndex] || '').trim().toLowerCase() || null : null,
+      unit_price: unitPrice,
+      quantity: Number.isInteger(parsedQuantity) && parsedQuantity > 0 ? parsedQuantity : 1,
+      description: null,
+    }];
+  });
+
+  return items;
+}
+
 // buffer: the raw file bytes (image or PDF), mimeType: e.g. 'image/jpeg', 'application/pdf'.
 function extractFromReceipt(buffer, mimeType) {
   return callGemini([
@@ -96,8 +153,11 @@ function extractFromReceipt(buffer, mimeType) {
 // rows: array of arrays (or objects) already parsed out of the spreadsheet by exceljs --
 // serialized as simple tab-separated text so Gemini can read arbitrary/inconsistent headers.
 function extractFromSpreadsheet(rows) {
+  const structuredRows = extractStructuredSpreadsheet(rows);
+  if (structuredRows) return Promise.resolve(structuredRows);
+
   const text = rows.map((row) => row.join('\t')).join('\n');
   return callGemini([{ text: SPREADSHEET_PROMPT + text }]);
 }
 
-module.exports = { extractFromReceipt, extractFromSpreadsheet };
+module.exports = { extractFromReceipt, extractFromSpreadsheet, extractStructuredSpreadsheet };
