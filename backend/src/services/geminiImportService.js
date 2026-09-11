@@ -4,7 +4,7 @@
 // the model is constrained to return exactly this shape or the call fails
 // cleanly, instead of us having to guess at loosely-formatted JSON.
 
-const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent';
 
 const ROW_SCHEMA = {
   type: 'ARRAY',

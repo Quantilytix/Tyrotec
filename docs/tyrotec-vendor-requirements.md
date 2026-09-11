@@ -83,8 +83,8 @@ Important webhook URLs the business must point to live Render hosts:
 
 - WhatsApp webhook: `https://<backend-domain>/api/whatsapp/webhook`
 - PayFast notify URL: `https://<backend-domain>/api/payments/payfast/notify`
-- PayFast return URL: `https://<frontend-domain>/checkout/complete`
-- PayFast cancel URL: `https://<frontend-domain>/checkout/cancelled`
+- PayFast return URL: `https://<frontend-domain>/orders`
+- PayFast cancel URL: `https://<frontend-domain>/orders`
 
 ---
 
@@ -190,8 +190,8 @@ Environment variables expected by the app:
 Required PayFast callback endpoints:
 
 - Notify URL: `https://<backend-domain>/api/payments/payfast/notify`
-- Return URL: `https://<frontend-domain>/checkout/complete`
-- Cancel URL: `https://<frontend-domain>/checkout/cancelled`
+- Return URL: `https://<frontend-domain>/orders`
+- Cancel URL: `https://<frontend-domain>/orders`
 
 Important notes:
 
