@@ -1,0 +1,20 @@
+# Render Blueprint for the Tyrotec React frontend.
+#
+# The rewrite rule is essential for this single-page application: a direct
+# visit or browser refresh on /orders, /admin/payments, etc. must return the
+# Vite entry point, after which React Router selects the correct page.
+staticSites:
+  - name: tyrotec-portal
+    buildCommand: cd frontend && npm ci && npm run build
+    publishPath: frontend/dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_URL
+        sync: false
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_ANON_KEY
+        sync: false

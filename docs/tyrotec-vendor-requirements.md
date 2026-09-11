@@ -71,6 +71,14 @@ These are used for:
 - WhatsApp webhook and callback host configuration
 - server-generated public links
 
+### Render frontend routing
+
+The frontend is a React single-page application. Deploy it from the root
+`render.yaml` Blueprint (or add the equivalent rule in the Render dashboard)
+so every frontend route is rewritten to `/index.html`. Without this rule,
+refreshing a page such as `/admin/payments` returns Render's **Not Found**
+page before React can load.
+
 Important webhook URLs the business must point to live Render hosts:
 
 - WhatsApp webhook: `https://<backend-domain>/api/whatsapp/webhook`
