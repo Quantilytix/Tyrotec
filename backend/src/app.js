@@ -30,9 +30,19 @@ const app = express();
 // a forged X-Forwarded-For header.
 app.set('trust proxy', 1);
 
+// Browser origins allowed to call this API, comma-separated (the deployed
+// frontend URL, e.g. https://portal.tyrotec.co.za). Left unset, any origin is
+// allowed -- convenient for local development, but set it in production.
+// Server-to-server callers (the PayFast ITN, Meta's WhatsApp webhook) send no
+// Origin header, so they're unaffected either way.
+const allowedOrigins = (process.env.CORS_ORIGINS || '')
+  .split(',')
+  .map((origin) => origin.trim().replace(/\/$/, ''))
+  .filter(Boolean);
+
 // Global Middlewares
 app.use(helmet());
-app.use(cors());
+app.use(cors(allowedOrigins.length > 0 ? { origin: allowedOrigins } : undefined));
 
 // Scoped to exactly this path, and registered before the global
 // express.json() below, so it captures the raw request bytes into
@@ -75,10 +85,42 @@ app.get('/health', (req, res) => {
 app.use(notFound);
 app.use(errorHandler);
 
+// Not required to boot (config/supabase.js already refuses to start without
+// the Supabase keys), but each one silently disables a feature when missing --
+// a PayFast checkout with no return URL, emails never sent -- so say so loudly
+// in the deploy log instead of finding out from a customer.
+const EXPECTED_ENV = [
+  'FRONTEND_URL',
+  'BACKEND_URL',
+  'CORS_ORIGINS',
+  'SMTP_HOST',
+  'SMTP_FROM',
+  'PAYFAST_MERCHANT_ID',
+  'PAYFAST_MERCHANT_KEY',
+  'PAYFAST_RETURN_URL',
+  'PAYFAST_CANCEL_URL',
+  'WHATSAPP_ACCESS_TOKEN',
+  'WHATSAPP_PHONE_NUMBER_ID',
+  'WHATSAPP_APP_SECRET',
+  'WHATSAPP_VERIFY_TOKEN',
+  'GEMINI_API_KEY',
+];
+
 // Start Server
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  const missingEnv = EXPECTED_ENV.filter((key) => !process.env[key]);
+  if (missingEnv.length > 0) {
+    console.warn(`Missing environment variables (the features that use them won't work): ${missingEnv.join(', ')}`);
+  }
+});
+
+// Render sends SIGTERM to the old instance once a new deploy is live. Stop
+// taking new connections but let in-flight requests finish -- a PayFast ITN
+// cut off halfway would leave PayFast retrying a half-processed payment.
+process.on('SIGTERM', () => {
+  server.close(() => process.exit(0));
 });
 
 module.exports = app;

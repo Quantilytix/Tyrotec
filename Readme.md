@@ -26,7 +26,7 @@ Tyrotec Portal is a B2B ordering platform for industrial products. Customers can
 | Messaging | Meta WhatsApp Cloud API, Nodemailer/SMTP |
 | PDFs | jsPDF and jsPDF AutoTable |
 | Product imports | Gemini structured-output API |
-| Hosting | Render Static Site, Render Web Service, Render Cron Jobs |
+| Hosting | Vercel (frontend), Render Web Service and Cron Jobs (backend) |
 
 ## Project structure
 
@@ -42,7 +42,7 @@ Tyrotec Portal is a B2B ordering platform for industrial products. Customers can
 │   ├── src/jobs/             # Reservation warning/release cron scripts
 │   └── sql/                  # Database bootstrap and legacy migrations
 ├── docs/                     # Operating and vendor setup documentation
-└── render.yaml               # Render frontend Blueprint and SPA routing rule
+└── render.yaml               # Render Blueprint: backend API and cron jobs
 ```
 
 ## Local development
@@ -76,6 +76,7 @@ SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 FRONTEND_URL=http://localhost:5173
 BACKEND_URL=http://localhost:5000
+CORS_ORIGINS=
 
 SMTP_HOST=
 SMTP_PORT=587
@@ -148,47 +149,48 @@ cd frontend && npm run lint
 cd frontend && npm run build
 ```
 
-## Deploying to Render
+## Deployment
 
-### Frontend
+The backend runs on Render and the frontend on Vercel.
 
-The root [render.yaml](render.yaml) is a Render Blueprint for the Vite static site. It includes an SPA rewrite from `/*` to `/index.html`; this is required so refreshing deep links such as `/admin/payments` does not show Render's **Not Found** page.
+### Backend (Render)
 
-Set these Render environment variables during frontend deployment:
+The root [render.yaml](render.yaml) is a Render Blueprint that creates three services from `backend/`:
 
-- `VITE_API_URL`
+| Service | Type | What it runs |
+| --- | --- | --- |
+| `tyrotec-api` | Web service | `npm start`, health check `/health` |
+| `tyrotec-warn-expiring-reservations` | Cron job, every 5 minutes | `node src/jobs/warnExpiringReservations.js` |
+| `tyrotec-release-expired-reservations` | Cron job, every 5 minutes (one minute after the warning job) | `node src/jobs/releaseExpiredReservations.js` |
+
+In the Render Dashboard choose **New → Blueprint** and select this repository. Render asks for every secret and URL marked `sync: false` in `render.yaml`; the values are described in [backend/.env.example](backend/.env.example). Non-secret settings (`PAYFAST_MODE`, review threshold, reservation timings) live in the `tyrotec-backend-settings` environment group inside `render.yaml`.
+
+- Choose the Render region closest to the Supabase project before creating the Blueprint; it can't be changed later.
+- `BACKEND_URL` is the web service's public URL, e.g. `https://tyrotec-api.onrender.com`. PayFast's notify URL is built from it.
+- `PAYFAST_PASSPHRASE` must exactly match the passphrase on the PayFast merchant account, or be empty if the account has none.
+- `CORS_ORIGINS` is a comma-separated list of browser origins allowed to call the API, normally just the frontend URL.
+- On startup the API logs any expected environment variable that is missing.
+
+### Frontend (Vercel)
+
+Import the repository in Vercel with **Root Directory** set to `frontend`; Vercel detects Vite and builds with `npm run build` into `dist`. [frontend/vercel.json](frontend/vercel.json) rewrites every path to `index.html` so refreshing deep links such as `/admin/payments` works.
+
+Set these environment variables in Vercel. They're compiled into the build, so redeploy after changing them:
+
+- `VITE_API_URL` — the backend URL plus `/api`
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`
 
-### Backend
-
-Deploy `backend` as a Render Node Web Service:
-
-```text
-Build command: cd backend && npm ci
-Start command: cd backend && npm start
-```
-
-Set the backend environment variables listed above, replacing local URLs with deployed frontend and backend URLs. Keep `SUPABASE_SERVICE_ROLE_KEY`, PayFast keys, SMTP credentials, WhatsApp tokens, and the Gemini key secret.
-
-### Cron jobs
-
-Create two Render Cron Jobs with the same backend environment variables:
-
-```text
-cd backend && node src/jobs/warnExpiringReservations.js
-cd backend && node src/jobs/releaseExpiredReservations.js
-```
-
-Run each approximately every five minutes. The warning job should run before the release job in the schedule.
+After the frontend has a URL, set `FRONTEND_URL`, `CORS_ORIGINS`, `PAYFAST_RETURN_URL`, and `PAYFAST_CANCEL_URL` on the Render web service to match.
 
 ## Production checklist
 
 - [ ] New Supabase schema has been created with `000_fresh_database_schema.sql`
 - [ ] First administrator account has been promoted
 - [ ] Supabase Auth redirect URLs include the deployed frontend URL
-- [ ] Render frontend uses the SPA rewrite in `render.yaml`
-- [ ] Render backend has all required secrets
+- [ ] Vercel frontend deployed from `frontend/` with its three `VITE_*` variables
+- [ ] Render Blueprint applied; `/health` responds and both cron jobs run cleanly
+- [ ] Render backend has all required secrets, and `CORS_ORIGINS` is set
 - [ ] PayFast uses live credentials, live URLs, and a verified notify endpoint
 - [ ] SMTP is configured for `sales@tyrotec.co.za` with SPF/DKIM records
 - [ ] WhatsApp webhook points to `/api/whatsapp/webhook`

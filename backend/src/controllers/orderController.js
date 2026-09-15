@@ -85,7 +85,7 @@ const getAllOrdersAdmin = asyncHandler(async (req, res) => {
 const getOrderById = asyncHandler(async (req, res) => {
   let query = supabase
     .from('orders')
-    .select('*, order_items(*, products(name, sku)), users(email, company_name), payments(*), stock_reservations(expires_at)')
+    .select('*, order_items(*, products(name, sku)), users(email, company_name, full_name, phone, vat_number, address), payments(*), stock_reservations(expires_at)')
     .eq('id', req.params.id);
 
   if (!['admin', 'sales_rep'].includes(req.user.role)) {

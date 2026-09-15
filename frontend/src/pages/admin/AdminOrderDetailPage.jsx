@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { getOrderById, updateOrderStatus } from '../../api/orders';
 import { createPayment } from '../../api/payments';
 import { formatCurrency, formatDate } from '../../utils/formatters';
+import { downloadReceiptPdf, getReceiptPayment } from '../../utils/generateReceiptPdf';
 import StatusBadge from '../../components/ui/StatusBadge';
 import Spinner from '../../components/ui/Spinner';
 import Button from '../../components/ui/Button';
@@ -159,6 +160,11 @@ export default function AdminOrderDetailPage() {
         </div>
         <div className="flex items-center gap-3">
           {error && <p className="text-sm text-bad-500">{error}</p>}
+          {getReceiptPayment(order) && (
+            <Button variant="secondary" onClick={() => downloadReceiptPdf(order)}>
+              Download receipt
+            </Button>
+          )}
           {canSubmitPayment && <Button onClick={() => setShowPaymentModal(true)}>Submit payment</Button>}
           {nextOptions.length === 0 ? (
             <p className="text-sm text-slate-500">

@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { getOrderById, getOrderStatus, initiatePayfastPayment, submitManualPaymentForReview } from '../api/orders';
 import { createPayment } from '../api/payments';
 import { formatCurrency, formatDate } from '../utils/formatters';
+import { downloadReceiptPdf, getReceiptPayment } from '../utils/generateReceiptPdf';
 import StatusBadge from '../components/ui/StatusBadge';
 import Spinner from '../components/ui/Spinner';
 import Button from '../components/ui/Button';
@@ -96,6 +97,7 @@ export default function OrderDetailPage() {
   const isStockReserved = order.status === 'stock_reserved';
   const canSubmitPayment = (order.status === 'approved' || isStockReserved) && !activePayment;
   const reservation = order.stock_reservations?.[0];
+  const hasReceipt = Boolean(getReceiptPayment(order));
 
   const handleSubmitPayment = async (payload) => {
     if (isStockReserved) {
@@ -189,6 +191,11 @@ export default function OrderDetailPage() {
             <StatusBadge status="payment_rejected" />
           )}
           {activePayment && <StatusBadge status={`payment_${activePayment.status}`} />}
+          {hasReceipt && (
+            <Button variant="secondary" onClick={() => downloadReceiptPdf(order)}>
+              Download receipt
+            </Button>
+          )}
           {canSubmitPayment && isStockReserved && (
             <Button variant="secondary" onClick={() => setShowPaymentModal(true)}>
               Pay via bank transfer instead
