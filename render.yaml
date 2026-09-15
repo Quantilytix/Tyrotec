@@ -1,9 +1,11 @@
-# Render Blueprint for the Tyrotec backend: the API web service and the two
-# reservation cron jobs. (The React frontend is hosted on Vercel -- see
-# frontend/vercel.json.)
+# Render Blueprint for Tyrotec Portal: the React frontend (static site), the
+# API web service, and the two reservation cron jobs.
 #
-# Each service sets rootDir: backend, so commits that only touch frontend/ or
-# docs/ don't trigger backend deploys.
+# The backend services set rootDir: backend and the frontend a buildFilter on
+# frontend/**, so each side only rebuilds when its own code changes.
+#
+# Default service URLs are https://<name>.onrender.com -- tyrotec-portal and
+# tyrotec-api below -- unless Render appends a suffix because a name is taken.
 #
 # Apply it from the Render Dashboard: New > Blueprint > pick this repo.
 # Render asks for every `sync: false` value while creating the Blueprint --
@@ -30,6 +32,46 @@ envVarGroups:
         value: "10"
 
 services:
+  # Customer and admin portal (Vite build served from Render's CDN).
+  - type: web
+    name: tyrotec-portal
+    runtime: static
+    branch: main
+    buildCommand: cd frontend && npm ci && npm run build
+    staticPublishPath: ./frontend/dist
+    autoDeployTrigger: commit
+    buildFilter:
+      paths:
+        - frontend/**
+    # Single-page app: every path must serve index.html so React Router can
+    # pick the page. Without this, refreshing /orders or /admin/payments --
+    # or PayFast's return redirect to /orders -- shows Render's "Not Found".
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+    # Compiled into the JavaScript bundle at build time: after changing any of
+    # these, trigger a new deploy of this site.
+    envVars:
+      # Backend URL plus /api, e.g. https://tyrotec-api.onrender.com/api
+      - key: VITE_API_URL
+        sync: false
+      - key: VITE_SUPABASE_URL
+        sync: false
+      # The Supabase *anon* (public) key -- never the service-role key.
+      - key: VITE_SUPABASE_ANON_KEY
+        sync: false
+
   - type: web
     name: tyrotec-api
     runtime: node
@@ -51,8 +93,9 @@ services:
       # (no trailing slash). PayFast's notify_url is built from it.
       - key: BACKEND_URL
         sync: false
-      # Public URL of the Vercel frontend (no trailing slash). Password-reset
-      # emails link to it.
+      # Public URL of the frontend static site, e.g.
+      # https://tyrotec-portal.onrender.com (no trailing slash).
+      # Password-reset emails link to it.
       - key: FRONTEND_URL
         sync: false
       # Browser origins allowed to call the API, comma-separated -- normally
