@@ -232,16 +232,22 @@ create trigger payments_set_updated_at before update on public.payments for each
 
 -- Auth profile sync. The backend also upserts profiles after signup to avoid
 -- depending on trigger timing, but this keeps direct Supabase signups valid.
+-- raw_user_meta_data is writable by anyone calling Supabase Auth's public
+-- signup endpoint with the anon key, so it must never grant a privileged
+-- role: only a customer, or a pending sales_rep awaiting admin approval.
 create or replace function public.handle_new_auth_user()
 returns trigger language plpgsql security definer set search_path = public as $$
 begin
-  insert into public.users (id, email, company_name, full_name, role)
+  insert into public.users (id, email, company_name, full_name, role, status)
   values (
     new.id,
     new.email,
     new.raw_user_meta_data->>'company_name',
     new.raw_user_meta_data->>'full_name',
-    coalesce((new.raw_user_meta_data->>'role')::public.user_role, 'customer')
+    case when new.raw_user_meta_data->>'role' = 'sales_rep'
+      then 'sales_rep'::public.user_role else 'customer'::public.user_role end,
+    case when new.raw_user_meta_data->>'role' = 'sales_rep'
+      then 'pending'::public.account_status else 'approved'::public.account_status end
   ) on conflict (id) do nothing;
   return new;
 end;
@@ -364,6 +370,21 @@ begin
 end;
 $$;
 
+-- These SECURITY DEFINER functions are called only by the backend's service
+-- role. Supabase grants EXECUTE on new public functions to anon and
+-- authenticated, which would let anyone with the public anon key call
+-- /rest/v1/rpc/approve_order etc. directly and skip the API's role checks.
+revoke execute on function public.approve_order(uuid) from public, anon, authenticated;
+revoke execute on function public.cancel_order(uuid) from public, anon, authenticated;
+revoke execute on function public.checkout_quote_with_reservation(uuid, uuid, integer) from public, anon, authenticated;
+revoke execute on function public.release_expired_reservations() from public, anon, authenticated;
+revoke execute on function public.warn_expiring_reservations(integer) from public, anon, authenticated;
+grant execute on function public.approve_order(uuid) to service_role;
+grant execute on function public.cancel_order(uuid) to service_role;
+grant execute on function public.checkout_quote_with_reservation(uuid, uuid, integer) to service_role;
+grant execute on function public.release_expired_reservations() to service_role;
+grant execute on function public.warn_expiring_reservations(integer) to service_role;
+
 -- Storage buckets required by product and payment-proof uploads.
 insert into storage.buckets (id, name, public) values
   ('Product Images', 'Product Images', true),
@@ -381,6 +402,7 @@ alter table public.order_items enable row level security;
 alter table public.notifications enable row level security;
 alter table public.payments enable row level security;
 alter table public.whatsapp_conversations enable row level security;
+alter table public.whatsapp_processed_messages enable row level security;
 alter table public.stock_reservations enable row level security;
 alter table public.admin_reviews enable row level security;
 alter table public.activity_log enable row level security;
