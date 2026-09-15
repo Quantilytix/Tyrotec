@@ -2,6 +2,8 @@ const nodemailer = require('nodemailer');
 const supabase = require('../config/supabase');
 const { sendText } = require('../config/whatsapp');
 
+const BREVO_SEND_URL = 'https://api.brevo.com/v3/smtp/email';
+
 let transporter = null;
 
 function getTransporter() {
@@ -19,11 +21,48 @@ function getTransporter() {
   return transporter;
 }
 
+// The sender as configured -- `Tyrotec <sales@tyrotec.co.za>` or a bare
+// address. EMAIL_FROM is the current name; SMTP_FROM still works so existing
+// SMTP setups don't need renaming.
+function senderAddress() {
+  return process.env.EMAIL_FROM || process.env.SMTP_FROM || process.env.SMTP_USER || '';
+}
+
+function parseSender(from) {
+  const match = from.match(/^\s*(.*?)\s*<([^>]+)>\s*$/);
+  if (match) return { name: match[1].replace(/^"|"$/g, '') || undefined, email: match[2].trim() };
+  return { email: from.trim() };
+}
+
+// Brevo's transactional email API over HTTPS. Used whenever BREVO_API_KEY is
+// set, because hosts like Render's Free plan block outbound SMTP ports (25,
+// 465, 587) but not HTTPS.
+async function sendViaBrevo(to, subject, text) {
+  const res = await fetch(BREVO_SEND_URL, {
+    method: 'POST',
+    headers: {
+      'api-key': process.env.BREVO_API_KEY,
+      'content-type': 'application/json',
+      accept: 'application/json',
+    },
+    body: JSON.stringify({ sender: parseSender(senderAddress()), to: [{ email: to }], subject, textContent: text }),
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw new Error(`Brevo responded ${res.status}: ${detail.slice(0, 200)}`);
+  }
+}
+
 async function sendEmail(to, subject, text) {
-  const t = getTransporter();
-  if (!t || !to) return;
+  if (!to) return;
   try {
-    await t.sendMail({ from: process.env.SMTP_FROM || process.env.SMTP_USER, to, subject, text });
+    if (process.env.BREVO_API_KEY) {
+      await sendViaBrevo(to, subject, text);
+      return;
+    }
+    const t = getTransporter();
+    if (!t) return;
+    await t.sendMail({ from: senderAddress(), to, subject, text });
   } catch (err) {
     console.error('Failed to send email to', to, '-', err.message);
   }

@@ -16,6 +16,7 @@ const payfastRoutes = require('./routes/payfastRoutes');
 const adminReviewRoutes = require('./routes/adminReviewRoutes');
 const activityLogRoutes = require('./routes/activityLogRoutes');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
+const { startInProcessJobs } = require('./jobs/inProcessScheduler');
 
 const app = express();
 
@@ -93,8 +94,6 @@ const EXPECTED_ENV = [
   'FRONTEND_URL',
   'BACKEND_URL',
   'CORS_ORIGINS',
-  'SMTP_HOST',
-  'SMTP_FROM',
   'PAYFAST_MERCHANT_ID',
   'PAYFAST_MERCHANT_KEY',
   'PAYFAST_RETURN_URL',
@@ -113,6 +112,19 @@ const server = app.listen(PORT, () => {
   const missingEnv = EXPECTED_ENV.filter((key) => !process.env[key]);
   if (missingEnv.length > 0) {
     console.warn(`Missing environment variables (the features that use them won't work): ${missingEnv.join(', ')}`);
+  }
+  if (!process.env.BREVO_API_KEY && !process.env.SMTP_HOST) {
+    console.warn('No email provider configured (BREVO_API_KEY or SMTP_HOST): email notifications are disabled.');
+  } else if (!process.env.EMAIL_FROM && !process.env.SMTP_FROM) {
+    console.warn('EMAIL_FROM is not set: emails have no sender address and will be rejected.');
+  }
+
+  // Hosting without scheduled jobs (Render Free) runs the reservation jobs
+  // here instead -- see jobs/inProcessScheduler.js for why only one instance
+  // may have this on.
+  if (process.env.RUN_JOBS_IN_PROCESS === 'true') {
+    startInProcessJobs();
+    console.log('Reservation warning/release jobs running in-process every 5 minutes.');
   }
 });
 

@@ -1,8 +1,17 @@
-# Render Blueprint for Tyrotec Portal: the React frontend (static site), the
-# API web service, and the two reservation cron jobs.
+# Render Blueprint for Tyrotec Portal on Render's Free plan: the React
+# frontend (static site) and the API (free web service).
 #
-# The backend services set rootDir: backend and the frontend a buildFilter on
-# frontend/**, so each side only rebuilds when its own code changes.
+# Free-plan trade-offs, and what the app does about them:
+# - No Cron Jobs: the API runs the reservation warning/release jobs itself
+#   every 5 minutes (RUN_JOBS_IN_PROCESS below; backend/src/jobs/inProcessScheduler.js).
+# - The API spins down after 15 minutes without traffic and takes about a
+#   minute to wake. An external uptime monitor pinging /health keeps it awake.
+# - Outbound SMTP ports (25, 465, 587) are blocked, so email is sent through
+#   Brevo's HTTPS API instead (BREVO_API_KEY below).
+# Moving to a paid plan: see "Upgrading from the Free plan" in README.md.
+#
+# The API sets rootDir: backend and the frontend a buildFilter on frontend/**,
+# so each side only rebuilds when its own code changes.
 #
 # Default service URLs are https://<name>.onrender.com -- tyrotec-portal and
 # tyrotec-api below -- unless Render appends a suffix because a name is taken.
@@ -10,26 +19,7 @@
 # Apply it from the Render Dashboard: New > Blueprint > pick this repo.
 # Render asks for every `sync: false` value while creating the Blueprint --
 # those are secrets or deployment-specific URLs and deliberately never live in
-# this file. The cron jobs ask for their own copies of the values they need;
-# Blueprints can't put secrets in a shared environment group.
-#
-# region can't be changed after a service is created. Pick the Render region
-# closest to the Supabase project's region (Supabase Dashboard > Project
-# Settings > General), e.g. eu-central-1 -> frankfurt.
-
-envVarGroups:
-  # Non-secret settings shared by all three services. Values set here win on
-  # every Blueprint sync, so change them in this file, not the Dashboard.
-  - name: tyrotec-backend-settings
-    envVars:
-      - key: PAYFAST_MODE
-        value: sandbox # switch to `live` at go-live, together with live PayFast credentials
-      - key: ADMIN_REVIEW_THRESHOLD
-        value: "50000"
-      - key: RESERVATION_EXPIRY_MINUTES
-        value: "60"
-      - key: RESERVATION_WARNING_LEAD_MINUTES
-        value: "10"
+# this file.
 
 services:
   # Customer and admin portal (Vite build served from Render's CDN).
@@ -75,8 +65,10 @@ services:
   - type: web
     name: tyrotec-api
     runtime: node
+    plan: free
+    # Closest Render region to the Supabase project (eu-west-1, Ireland).
+    # Can't be changed after the service is created.
     region: frankfurt
-    plan: 0.5c-512mb
     branch: main
     rootDir: backend
     buildCommand: npm ci --omit=dev
@@ -84,7 +76,18 @@ services:
     healthCheckPath: /health
     autoDeployTrigger: commit
     envVars:
-      - fromGroup: tyrotec-backend-settings
+      # No Cron Jobs on the Free plan, so the API runs the reservation jobs.
+      # Set to "false" if the jobs are ever moved to Render Cron Jobs.
+      - key: RUN_JOBS_IN_PROCESS
+        value: "true"
+      - key: PAYFAST_MODE
+        value: sandbox # switch to `live` at go-live, together with live PayFast credentials
+      - key: ADMIN_REVIEW_THRESHOLD
+        value: "50000"
+      - key: RESERVATION_EXPIRY_MINUTES
+        value: "60"
+      - key: RESERVATION_WARNING_LEAD_MINUTES
+        value: "10"
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
@@ -102,17 +105,11 @@ services:
       # just the frontend URL.
       - key: CORS_ORIGINS
         sync: false
-      - key: SMTP_HOST
+      # Email goes through Brevo's HTTPS API, since the Free plan blocks SMTP.
+      - key: BREVO_API_KEY
         sync: false
-      - key: SMTP_PORT
-        sync: false
-      - key: SMTP_SECURE
-        sync: false
-      - key: SMTP_USER
-        sync: false
-      - key: SMTP_PASS
-        sync: false
-      - key: SMTP_FROM
+      # Verified Brevo sender, e.g. Tyrotec <sales@tyrotec.co.za>
+      - key: EMAIL_FROM
         sync: false
       - key: PAYFAST_MERCHANT_ID
         sync: false
@@ -137,72 +134,4 @@ services:
       - key: WHATSAPP_VERIFY_TOKEN
         sync: false
       - key: GEMINI_API_KEY
-        sync: false
-
-  # Warns customers shortly before an unpaid fast-checkout reservation expires.
-  # Runs on the 5-minute marks, a minute ahead of the release job below.
-  - type: cron
-    name: tyrotec-warn-expiring-reservations
-    runtime: node
-    region: frankfurt
-    branch: main
-    rootDir: backend
-    schedule: "*/5 * * * *"
-    buildCommand: npm ci --omit=dev
-    startCommand: node src/jobs/warnExpiringReservations.js
-    envVars:
-      - fromGroup: tyrotec-backend-settings
-      - key: SUPABASE_URL
-        sync: false
-      - key: SUPABASE_SERVICE_ROLE_KEY
-        sync: false
-      - key: SMTP_HOST
-        sync: false
-      - key: SMTP_PORT
-        sync: false
-      - key: SMTP_SECURE
-        sync: false
-      - key: SMTP_USER
-        sync: false
-      - key: SMTP_PASS
-        sync: false
-      - key: SMTP_FROM
-        sync: false
-      - key: WHATSAPP_ACCESS_TOKEN
-        sync: false
-      - key: WHATSAPP_PHONE_NUMBER_ID
-        sync: false
-
-  # Cancels unpaid fast-checkout orders whose reservation has expired, restores
-  # their stock, and notifies the customer.
-  - type: cron
-    name: tyrotec-release-expired-reservations
-    runtime: node
-    region: frankfurt
-    branch: main
-    rootDir: backend
-    schedule: "1-59/5 * * * *"
-    buildCommand: npm ci --omit=dev
-    startCommand: node src/jobs/releaseExpiredReservations.js
-    envVars:
-      - fromGroup: tyrotec-backend-settings
-      - key: SUPABASE_URL
-        sync: false
-      - key: SUPABASE_SERVICE_ROLE_KEY
-        sync: false
-      - key: SMTP_HOST
-        sync: false
-      - key: SMTP_PORT
-        sync: false
-      - key: SMTP_SECURE
-        sync: false
-      - key: SMTP_USER
-        sync: false
-      - key: SMTP_PASS
-        sync: false
-      - key: SMTP_FROM
-        sync: false
-      - key: WHATSAPP_ACCESS_TOKEN
-        sync: false
-      - key: WHATSAPP_PHONE_NUMBER_ID
         sync: false
