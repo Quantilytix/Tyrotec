@@ -36,7 +36,7 @@ export default function Login() {
       <div className="rounded-2xl bg-white p-8 shadow-card">
         <div className="mb-8 flex items-center gap-2">
           <img src="/jamlea.jpg" alt="Tyrotec" className="h-10 w-20 object-contain" />
-          <span className="font-display text-lg font-semibold text-ink">Tyrotec Customer Portal</span>
+          <span className="font-display text-lg font-semibold text-ink">Tyrotec  Portal</span>
         </div>
 
         <h1 className="font-display text-xl font-semibold text-ink">Sign in</h1>
@@ -51,7 +51,7 @@ export default function Login() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none transition-colors duration-150 focus:border-teal-500"
-              placeholder="you@company.com"
+              placeholder="name@example.com"
             />
           </div>
           <div>

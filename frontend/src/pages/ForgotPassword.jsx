@@ -27,7 +27,7 @@ export default function ForgotPassword() {
       <div className="w-full max-w-sm rounded-2xl bg-white p-8 shadow-card">
         <div className="mb-8 flex items-center gap-2">
           <img src="/jamlea.jpg" alt="Tyrotec" className="h-10 w-auto object-contain" />
-          <span className="font-display text-lg font-semibold text-ink">Tyrotec Customer Portal</span>
+          <span className="font-display text-lg font-semibold text-ink">Tyrotec Portal</span>
         </div>
 
         <h1 className="font-display text-xl font-semibold text-ink">Reset your password</h1>
@@ -50,7 +50,7 @@ export default function ForgotPassword() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-teal-500"
-                  placeholder="you@company.com"
+                  placeholder="name@example.com"
                 />
               </div>
               <Button type="submit" loading={loading} className="w-full">
