@@ -38,3 +38,8 @@ export const extractProductImport = (file) => {
 };
 
 export const confirmProductImport = (rows) => apiClient.post('/products/import/confirm', { rows });
+
+// Excel export of the catalogue, honouring the same search/category filters
+// as the product list. Returns a blob -- see utils/downloadFile.js.
+export const exportProducts = ({ search, category } = {}) =>
+  apiClient.get('/products/export', { params: { search, category }, responseType: 'blob' });

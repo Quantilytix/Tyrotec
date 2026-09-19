@@ -6,6 +6,9 @@ const { notifyInternalTeam } = require('../services/notificationService');
 const { formatCurrency } = require('../utils/formatCurrency');
 const { logActivity } = require('../services/activityLogService');
 const { friendlyRpcErrorMessage } = require('../utils/rpcErrorMessage');
+const { buildQuotesWorkbook, sendWorkbook } = require('../services/exportService');
+const { applyDateRange, fetchAllRows } = require('../utils/exportQuery');
+const { filterBySearch } = require('../utils/searchFilter');
 
 const RESERVATION_MINUTES = Number(process.env.RESERVATION_EXPIRY_MINUTES) || 60;
 
@@ -51,6 +54,28 @@ const getCustomerQuotes = asyncHandler(async (req, res) => {
 });
 
 // Admin/sales_rep only: every customer's quotes.
+// Admin/sales_rep only. Two sheets: one row per quote, plus one row per
+// product line across those quotes. Optional source and created_at range,
+// matching the filters on the admin Quotes screen.
+const exportQuotesAdmin = asyncHandler(async (req, res) => {
+  const { source, status, search, from, to } = req.query;
+
+  const quotes = await fetchAllRows(() => {
+    let query = supabase
+      .from('quotes')
+      .select('*, users(email, company_name), quote_items(*, products(name, sku))')
+      .order('created_at', { ascending: false });
+
+    if (source && source !== 'all') query = query.eq('source', source);
+    if (status && status !== 'all') query = query.eq('status', status);
+    return applyDateRange(query, { from, to });
+  });
+
+  // Search spans the joined customer record, so it's applied here rather than
+  // as a database filter -- see utils/searchFilter.js.
+  return sendWorkbook(res, buildQuotesWorkbook(filterBySearch(quotes, search, 'quote_number')), 'quotes');
+});
+
 const getAllQuotesAdmin = asyncHandler(async (req, res) => {
   const { data, error } = await supabase
     .from('quotes')
@@ -227,6 +252,7 @@ module.exports = {
   createQuoteForCustomerAdmin,
   getCustomerQuotes,
   getAllQuotesAdmin,
+  exportQuotesAdmin,
   getQuoteById,
   updateQuoteStatus,
   convertQuoteToOrder,

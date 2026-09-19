@@ -22,3 +22,8 @@ export const getOrderStatus = (orderId) => apiClient.get(`/orders/${orderId}/sta
 // never auto-confirms.
 export const submitManualPaymentForReview = (orderId, payload) =>
   apiClient.post(`/orders/${orderId}/manual-payment`, payload);
+
+// Excel export: one sheet of orders (including payment details), one of their
+// line items. Optional source and created-at date range (YYYY-MM-DD).
+export const exportOrdersAdmin = ({ source, from, to } = {}) =>
+  apiClient.get('/orders/admin/export', { params: { source, from, to }, responseType: 'blob' });

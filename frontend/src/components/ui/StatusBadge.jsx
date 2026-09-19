@@ -1,3 +1,5 @@
+import { statusLabel } from '../../utils/statusLabels';
+
 const STYLES = {
   // quote statuses
   submitted: 'bg-amber-50 text-amber-600',
@@ -38,19 +40,8 @@ const DOT_STYLES = {
   payment_rejected: 'bg-bad-500',
 };
 
-// Overrides the default "underscore -> space" label for statuses that need
-// wording different from the raw DB value (e.g. quotes are "saved" from the
-// customer's point of view, even though the stored status is 'submitted').
-const LABELS = {
-  submitted: 'Quote Finalized',
-  confirmed: 'Paid',
-  payment_submitted: 'Payment submitted',
-  payment_approved: 'Payment approved',
-  payment_rejected: 'Payment rejected',
-};
-
 export default function StatusBadge({ status }) {
-  const label = LABELS[status] || status?.replace(/_/g, ' ') || 'unknown';
+  const label = statusLabel(status);
   const style = STYLES[status] || 'bg-slate-100 text-slate-500';
   const dot = DOT_STYLES[status] || 'bg-slate-400';
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { getProducts, createProduct, updateProduct, deleteProduct } from '../../api/products';
+import { getProducts, createProduct, updateProduct, deleteProduct, exportProducts } from '../../api/products';
 import { formatCurrency } from '../../utils/formatters';
+import { saveBlobResponse, blobErrorMessage } from '../../utils/downloadFile';
 import Button from '../../components/ui/Button';
 import Spinner from '../../components/ui/Spinner';
 import EmptyState from '../../components/ui/EmptyState';
@@ -25,6 +26,8 @@ export default function AdminProductsPage() {
   const [modalMode, setModalMode] = useState(null); // null | 'create' | 'edit' | 'import' | 'supplier' | 'categories'
   const [editingProduct, setEditingProduct] = useState(null);
   const [deleteError, setDeleteError] = useState('');
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState('');
   const [deletingId, setDeletingId] = useState(null);
   const [confirmingDelete, setConfirmingDelete] = useState(null); // product | null
 
@@ -75,6 +78,21 @@ export default function AdminProductsPage() {
     load();
   };
 
+  // Exports every product matching the current search/category, not just the
+  // page on screen -- the server applies the same filters.
+  const handleExport = async () => {
+    setExportError('');
+    setExporting(true);
+    try {
+      const response = await exportProducts({ search, category: category || undefined });
+      saveBlobResponse(response, 'products.xlsx');
+    } catch (err) {
+      setExportError(await blobErrorMessage(err, 'Could not export the products.'));
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const handleDelete = async (product) => {
     setDeleteError('');
     setDeletingId(product.id);
@@ -123,13 +141,14 @@ export default function AdminProductsPage() {
             ))}
           </select>
           <Button variant="secondary" onClick={() => setModalMode('categories')}>Manage categories</Button>
+          <Button variant="secondary" onClick={handleExport} loading={exporting}>Export to Excel</Button>
           <Button variant="secondary" onClick={openImport}>Import from file</Button>
           <Button onClick={openCreate}>Add product</Button>
         </div>
       </div>
 
-      {deleteError && (
-        <p className="mt-4 rounded-lg bg-bad-50 px-3 py-2 text-sm text-bad-500">{deleteError}</p>
+      {(deleteError || exportError) && (
+        <p className="mt-4 rounded-lg bg-bad-50 px-3 py-2 text-sm text-bad-500">{deleteError || exportError}</p>
       )}
 
       {loading ? (

@@ -4,6 +4,7 @@ const { body } = require('express-validator');
 const router = express.Router();
 const {
   getAllProducts,
+  exportProducts,
   getProductById,
   createProduct,
   updateProduct,
@@ -120,6 +121,9 @@ router.post(
   createCategory
 );
 router.delete('/categories/:id', authenticateToken, requireRole(['admin', 'sales_rep']), deleteCategory);
+
+// Also before '/:id', same reason as the category routes above.
+router.get('/export', authenticateToken, requireRole(['admin', 'sales_rep']), exportProducts);
 
 router.get('/', authenticateToken, getAllProducts);
 router.get('/:id', authenticateToken, getProductById);

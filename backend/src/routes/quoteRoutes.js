@@ -6,6 +6,7 @@ const {
   createQuoteForCustomerAdmin,
   getCustomerQuotes,
   getAllQuotesAdmin,
+  exportQuotesAdmin,
   getQuoteById,
   updateQuoteStatus,
   convertQuoteToOrder,
@@ -36,6 +37,7 @@ router.post(
 );
 router.get('/my-quotes', authenticateToken, getCustomerQuotes);
 router.get('/admin/all', authenticateToken, requireRole(['admin', 'sales_rep']), getAllQuotesAdmin);
+router.get('/admin/export', authenticateToken, requireRole(['admin', 'sales_rep']), exportQuotesAdmin);
 router.get('/:quoteId', authenticateToken, getQuoteById);
 router.patch(
   '/:quoteId/status',

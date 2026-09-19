@@ -4,6 +4,7 @@ const router = express.Router();
 const {
   getCustomerOrders,
   getAllOrdersAdmin,
+  exportOrdersAdmin,
   getOrderById,
   updateOrderStatus,
   initiatePayfastPayment,
@@ -15,6 +16,7 @@ const validate = require('../middleware/validate');
 
 router.get('/my-orders', authenticateToken, getCustomerOrders);
 router.get('/admin/all', authenticateToken, requireRole(['admin', 'sales_rep']), getAllOrdersAdmin);
+router.get('/admin/export', authenticateToken, requireRole(['admin', 'sales_rep']), exportOrdersAdmin);
 router.get('/:orderId/status', authenticateToken, getOrderStatus);
 router.get('/:id', authenticateToken, getOrderById);
 router.post('/:id/pay', authenticateToken, initiatePayfastPayment);

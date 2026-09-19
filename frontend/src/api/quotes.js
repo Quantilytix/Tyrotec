@@ -24,3 +24,8 @@ export const getAllQuotesAdmin = () => apiClient.get('/quotes/admin/all');
 
 export const updateQuoteStatus = (quoteId, status) =>
   apiClient.patch(`/quotes/${quoteId}/status`, { status });
+
+// Excel export: one sheet of quotes, one of their line items. Optional source
+// and created-at date range (YYYY-MM-DD), matching the admin screen's filters.
+export const exportQuotesAdmin = ({ source, from, to } = {}) =>
+  apiClient.get('/quotes/admin/export', { params: { source, from, to }, responseType: 'blob' });

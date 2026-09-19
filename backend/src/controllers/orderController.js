@@ -4,6 +4,9 @@ const { notifyUser } = require('../services/notificationService');
 const { notifyIfLowStockCrossing } = require('./productController');
 const { transitionOrderStatus, ORDER_TRANSITIONS } = require('../services/orderStateService');
 const { buildCheckoutFields } = require('../services/payfastService');
+const { buildOrdersWorkbook, sendWorkbook } = require('../services/exportService');
+const { applyDateRange, fetchAllRows } = require('../utils/exportQuery');
+const { filterBySearch } = require('../utils/searchFilter');
 const { logActivity } = require('../services/activityLogService');
 const { friendlyRpcErrorMessage } = require('../utils/rpcErrorMessage');
 
@@ -80,6 +83,28 @@ const getAllOrdersAdmin = asyncHandler(async (req, res) => {
 
   if (error) throw error;
   return res.json(data);
+});
+
+// Admin/sales_rep only. Two sheets: one row per order, plus one row per
+// product line across those orders. Optional source and created_at range,
+// matching the filters on the admin Orders screen.
+const exportOrdersAdmin = asyncHandler(async (req, res) => {
+  const { source, status, search, from, to } = req.query;
+
+  const orders = await fetchAllRows(() => {
+    let query = supabase
+      .from('orders')
+      .select('*, users(email, company_name), order_items(*, products(name, sku)), payments(*)')
+      .order('created_at', { ascending: false });
+
+    if (source && source !== 'all') query = query.eq('source', source);
+    if (status && status !== 'all') query = query.eq('status', status);
+    return applyDateRange(query, { from, to });
+  });
+
+  // Search spans the joined customer record, so it's applied here rather than
+  // as a database filter -- see utils/searchFilter.js.
+  return sendWorkbook(res, buildOrdersWorkbook(filterBySearch(orders, search, 'order_number')), 'orders');
 });
 
 const getOrderById = asyncHandler(async (req, res) => {
@@ -230,6 +255,7 @@ const getOrderStatus = asyncHandler(async (req, res) => {
 module.exports = {
   getCustomerOrders,
   getAllOrdersAdmin,
+  exportOrdersAdmin,
   getOrderById,
   updateOrderStatus,
   initiatePayfastPayment,

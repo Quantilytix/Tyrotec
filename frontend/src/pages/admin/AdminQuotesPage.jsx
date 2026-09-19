@@ -1,7 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { getAllQuotesAdmin } from '../../api/quotes';
+import { getAllQuotesAdmin, exportQuotesAdmin } from '../../api/quotes';
 import { formatCurrency, formatDate } from '../../utils/formatters';
+import { saveBlobResponse, blobErrorMessage } from '../../utils/downloadFile';
+import { isWithinDateRange } from '../../utils/dateRange';
+import { matchesSearch, recordSearchParts } from '../../utils/searchFilter';
+import { QUOTE_STATUSES, statusLabel } from '../../utils/statusLabels';
+import ExportModal from '../../components/admin/ExportModal';
+import ListFilters from '../../components/admin/ListFilters';
+import Modal from '../../components/ui/Modal';
 import StatusBadge from '../../components/ui/StatusBadge';
 import SourceBadge from '../../components/ui/SourceBadge';
 import Spinner from '../../components/ui/Spinner';
@@ -13,6 +20,9 @@ export default function AdminQuotesPage() {
   const [quotes, setQuotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [sourceFilter, setSourceFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [search, setSearch] = useState('');
+  const [showExport, setShowExport] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -22,9 +32,47 @@ export default function AdminQuotesPage() {
   }, []);
 
   const visibleQuotes = useMemo(
-    () => (sourceFilter === 'all' ? quotes : quotes.filter((q) => q.source === sourceFilter)),
-    [quotes, sourceFilter]
+    () =>
+      quotes.filter(
+        (q) =>
+          (sourceFilter === 'all' || q.source === sourceFilter) &&
+          (statusFilter === 'all' || q.status === statusFilter) &&
+          matchesSearch(search, recordSearchParts(q, 'quote_number'))
+      ),
+    [quotes, sourceFilter, statusFilter, search]
   );
+
+  // Shown in the export modal before committing, so nobody downloads an empty
+  // file: the filters on screen, which the export applies too, plus its range.
+  const countInRange = (from, to) =>
+    visibleQuotes.filter((q) => isWithinDateRange(q.created_at, from, to)).length;
+
+  const isFiltering = Boolean(search) || sourceFilter !== 'all' || statusFilter !== 'all';
+
+  // Spelled out in the export modal so it's clear the file follows the
+  // filters on screen, not just the date range chosen in the modal.
+  const filterSummary = `${[
+    sourceFilter === 'all' ? 'All sources' : `Source: ${sourceFilter}`,
+    statusFilter === 'all' ? 'all statuses' : `status: ${statusLabel(statusFilter)}`,
+    search ? `search: "${search}"` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ')}.`;
+
+  const handleExport = async ({ from, to }) => {
+    try {
+      const response = await exportQuotesAdmin({
+        source: sourceFilter,
+        status: statusFilter,
+        search: search || undefined,
+        from: from || undefined,
+        to: to || undefined,
+      });
+      saveBlobResponse(response, 'quotes.xlsx');
+    } catch (err) {
+      throw new Error(await blobErrorMessage(err, 'Could not export the quotes.'));
+    }
+  };
 
   return (
     <div>
@@ -34,27 +82,52 @@ export default function AdminQuotesPage() {
           <p className="mt-1 text-sm text-slate-500">Every quote submitted across all customers.</p>
         </div>
         <div className="flex items-center gap-3">
-          <select
-            value={sourceFilter}
-            onChange={(e) => setSourceFilter(e.target.value)}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition-colors duration-150 focus:border-teal-500"
-          >
-            <option value="all">All sources</option>
-            <option value="portal">Portal</option>
-            <option value="whatsapp">WhatsApp</option>
-            <option value="admin">Staff</option>
-          </select>
+          <Button variant="secondary" onClick={() => setShowExport(true)}>
+            Export to Excel
+          </Button>
           <Link to="/admin/quotes/new">
             <Button>New quote</Button>
           </Link>
         </div>
       </div>
 
+      {showExport && (
+        <Modal title="Export quotes to Excel" onClose={() => setShowExport(false)}>
+          <ExportModal
+            noun="quotes"
+            filterSummary={filterSummary}
+            countFor={countInRange}
+            onExport={handleExport}
+            onClose={() => setShowExport(false)}
+          />
+        </Modal>
+      )}
+
+      <ListFilters
+        search={search}
+        onSearchChange={setSearch}
+        source={sourceFilter}
+        onSourceChange={setSourceFilter}
+        status={statusFilter}
+        onStatusChange={setStatusFilter}
+        statuses={QUOTE_STATUSES}
+        shown={visibleQuotes.length}
+        total={quotes.length}
+        noun="quotes"
+      />
+
       {loading ? (
         <Spinner />
       ) : visibleQuotes.length === 0 ? (
         <div className="mt-6">
-          <EmptyState title="No quotes yet" description="Submitted customer quotes will show up here." />
+          <EmptyState
+            title={isFiltering ? 'No quotes match these filters' : 'No quotes yet'}
+            description={
+              isFiltering
+                ? 'Try a different search, status or source.'
+                : 'Submitted customer quotes will show up here.'
+            }
+          />
         </div>
       ) : (
         <Card className="mt-6 overflow-hidden">

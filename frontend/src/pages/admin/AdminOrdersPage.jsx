@@ -1,7 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getAllOrdersAdmin } from '../../api/orders';
+import { getAllOrdersAdmin, exportOrdersAdmin } from '../../api/orders';
 import { formatCurrency, formatDate } from '../../utils/formatters';
+import { saveBlobResponse, blobErrorMessage } from '../../utils/downloadFile';
+import { isWithinDateRange } from '../../utils/dateRange';
+import { matchesSearch, recordSearchParts } from '../../utils/searchFilter';
+import { ORDER_STATUSES, statusLabel } from '../../utils/statusLabels';
+import ExportModal from '../../components/admin/ExportModal';
+import ListFilters from '../../components/admin/ListFilters';
+import Modal from '../../components/ui/Modal';
+import Button from '../../components/ui/Button';
 import StatusBadge from '../../components/ui/StatusBadge';
 import SourceBadge from '../../components/ui/SourceBadge';
 import Spinner from '../../components/ui/Spinner';
@@ -12,6 +20,9 @@ export default function AdminOrdersPage() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [sourceFilter, setSourceFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [search, setSearch] = useState('');
+  const [showExport, setShowExport] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -21,9 +32,47 @@ export default function AdminOrdersPage() {
   }, []);
 
   const visibleOrders = useMemo(
-    () => (sourceFilter === 'all' ? orders : orders.filter((o) => o.source === sourceFilter)),
-    [orders, sourceFilter]
+    () =>
+      orders.filter(
+        (o) =>
+          (sourceFilter === 'all' || o.source === sourceFilter) &&
+          (statusFilter === 'all' || o.status === statusFilter) &&
+          matchesSearch(search, recordSearchParts(o, 'order_number'))
+      ),
+    [orders, sourceFilter, statusFilter, search]
   );
+
+  const isFiltering = Boolean(search) || sourceFilter !== 'all' || statusFilter !== 'all';
+
+  // Spelled out in the export modal so it's clear the file follows the
+  // filters on screen, not just the date range chosen in the modal.
+  const filterSummary = `${[
+    sourceFilter === 'all' ? 'All sources' : `Source: ${sourceFilter}`,
+    statusFilter === 'all' ? 'all statuses' : `status: ${statusLabel(statusFilter)}`,
+    search ? `search: "${search}"` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ')}.`;
+
+  // Shown in the export modal before committing, so nobody downloads an empty
+  // file: the filters on screen, which the export applies too, plus its range.
+  const countInRange = (from, to) =>
+    visibleOrders.filter((o) => isWithinDateRange(o.created_at, from, to)).length;
+
+  const handleExport = async ({ from, to }) => {
+    try {
+      const response = await exportOrdersAdmin({
+        source: sourceFilter,
+        status: statusFilter,
+        search: search || undefined,
+        from: from || undefined,
+        to: to || undefined,
+      });
+      saveBlobResponse(response, 'orders.xlsx');
+    } catch (err) {
+      throw new Error(await blobErrorMessage(err, 'Could not export the orders.'));
+    }
+  };
 
   return (
     <div>
@@ -32,23 +81,48 @@ export default function AdminOrdersPage() {
           <h1 className="font-display text-xl font-semibold text-ink">Orders</h1>
           <p className="mt-1 text-sm text-slate-500">Every order placed across all customers.</p>
         </div>
-        <select
-          value={sourceFilter}
-          onChange={(e) => setSourceFilter(e.target.value)}
-          className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition-colors duration-150 focus:border-teal-500"
-        >
-          <option value="all">All sources</option>
-          <option value="portal">Portal</option>
-          <option value="whatsapp">WhatsApp</option>
-          <option value="admin">Staff</option>
-        </select>
+        <Button variant="secondary" onClick={() => setShowExport(true)}>
+          Export to Excel
+        </Button>
       </div>
+
+      {showExport && (
+        <Modal title="Export orders to Excel" onClose={() => setShowExport(false)}>
+          <ExportModal
+            noun="orders"
+            filterSummary={filterSummary}
+            countFor={countInRange}
+            onExport={handleExport}
+            onClose={() => setShowExport(false)}
+          />
+        </Modal>
+      )}
+
+      <ListFilters
+        search={search}
+        onSearchChange={setSearch}
+        source={sourceFilter}
+        onSourceChange={setSourceFilter}
+        status={statusFilter}
+        onStatusChange={setStatusFilter}
+        statuses={ORDER_STATUSES}
+        shown={visibleOrders.length}
+        total={orders.length}
+        noun="orders"
+      />
 
       {loading ? (
         <Spinner />
       ) : visibleOrders.length === 0 ? (
         <div className="mt-6">
-          <EmptyState title="No orders yet" description="Orders converted from customer quotes will show up here." />
+          <EmptyState
+            title={isFiltering ? 'No orders match these filters' : 'No orders yet'}
+            description={
+              isFiltering
+                ? 'Try a different search, status or source.'
+                : 'Orders converted from customer quotes will show up here.'
+            }
+          />
         </div>
       ) : (
         <Card className="mt-6 overflow-hidden">

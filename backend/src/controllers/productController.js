@@ -4,6 +4,8 @@ const supabase = require('../config/supabase');
 const asyncHandler = require('../utils/asyncHandler');
 const { notifyInternalTeam } = require('../services/notificationService');
 const { assertCategoryAllowed } = require('../services/categoryService');
+const { buildProductsWorkbook, sendWorkbook } = require('../services/exportService');
+const { fetchAllRows } = require('../utils/exportQuery');
 const { LOW_STOCK_THRESHOLD } = require('../config/constants');
 
 const PRODUCT_IMAGES_BUCKET = 'Product Images';
@@ -118,6 +120,28 @@ const getAllProducts = asyncHandler(async (req, res) => {
   return res.json({ data, page: pageNum, limit: limitNum, total: count });
 });
 
+// Admin/sales_rep only. The same search and category filters as the product
+// list, but every matching product rather than the current page -- staff
+// export what they're looking at.
+const exportProducts = asyncHandler(async (req, res) => {
+  const { search, category } = req.query;
+
+  const products = await fetchAllRows(() => {
+    let query = supabase.from('products').select('*').order('name', { ascending: true });
+
+    if (search) {
+      // Same separator stripping as getAllProducts -- see the comment there.
+      const safeSearch = String(search).replace(/[,()]/g, '');
+      query = query.or(`name.ilike.%${safeSearch}%,sku.ilike.%${safeSearch}%`);
+    }
+    if (category) query = query.eq('category', category);
+
+    return query;
+  });
+
+  return sendWorkbook(res, buildProductsWorkbook(products), 'products');
+});
+
 const getProductById = asyncHandler(async (req, res) => {
   const { data, error } = await supabase
     .from('products')
@@ -211,6 +235,7 @@ const deleteProduct = asyncHandler(async (req, res) => {
 
 module.exports = {
   getAllProducts,
+  exportProducts,
   getProductById,
   createProduct,
   updateProduct,
