@@ -5,6 +5,15 @@ export const getProducts = ({ search, category, page = 1, limit = 20 } = {}) =>
 
 export const getProductById = (id) => apiClient.get(`/products/${id}`);
 
+// The managed category list (backend/sql/022_product_categories.sql). Every
+// signed-in user can read it -- customers use it for the catalogue filter --
+// but only staff can change it.
+export const getCategories = () => apiClient.get('/products/categories');
+
+export const createCategory = (name) => apiClient.post('/products/categories', { name });
+
+export const deleteCategory = (id) => apiClient.delete(`/products/categories/${id}`);
+
 export const createProduct = (product) => apiClient.post('/products', product);
 
 export const updateProduct = (id, product) => apiClient.patch(`/products/${id}`, product);

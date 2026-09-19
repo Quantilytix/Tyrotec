@@ -3,6 +3,7 @@ const path = require('path');
 const supabase = require('../config/supabase');
 const asyncHandler = require('../utils/asyncHandler');
 const { notifyInternalTeam } = require('../services/notificationService');
+const { assertCategoryAllowed } = require('../services/categoryService');
 const { LOW_STOCK_THRESHOLD } = require('../config/constants');
 
 const PRODUCT_IMAGES_BUCKET = 'Product Images';
@@ -129,9 +130,14 @@ const getProductById = asyncHandler(async (req, res) => {
 });
 
 const createProduct = asyncHandler(async (req, res) => {
+  const fields = pickWritableFields(req.body);
+
+  const categoryProblem = await assertCategoryAllowed(fields.category);
+  if (categoryProblem) return res.status(categoryProblem.status).json({ error: categoryProblem.error });
+
   const { data, error } = await supabase
     .from('products')
-    .insert([pickWritableFields(req.body)])
+    .insert([fields])
     .select()
     .single();
 
@@ -142,17 +148,27 @@ const createProduct = asyncHandler(async (req, res) => {
 const updateProduct = asyncHandler(async (req, res) => {
   const fields = pickWritableFields(req.body);
 
-  // Only need the "before" value when stock is actually part of this edit --
-  // an extra read on every unrelated product edit (name, price, etc.) would
-  // be wasted.
+  // Only need the "before" values when stock or category are actually part of
+  // this edit -- an extra read on every unrelated product edit (name, price,
+  // etc.) would be wasted.
   let previousStock = null;
-  if (fields.stock_quantity !== undefined) {
+  let previousCategory = null;
+  if (fields.stock_quantity !== undefined || fields.category !== undefined) {
     const { data: existing } = await supabase
       .from('products')
-      .select('stock_quantity')
+      .select('stock_quantity, category')
       .eq('id', req.params.id)
       .single();
-    previousStock = existing?.stock_quantity ?? null;
+    previousStock = fields.stock_quantity !== undefined ? existing?.stock_quantity ?? null : null;
+    previousCategory = existing?.category ?? null;
+  }
+
+  // Products created before the managed category list exists keep categories
+  // that aren't on it: re-saving such a product unchanged is fine, changing
+  // its category means picking one from the list.
+  if (fields.category !== undefined) {
+    const categoryProblem = await assertCategoryAllowed(fields.category, previousCategory);
+    if (categoryProblem) return res.status(categoryProblem.status).json({ error: categoryProblem.error });
   }
 
   const { data, error } = await supabase

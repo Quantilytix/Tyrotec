@@ -11,6 +11,7 @@ const {
   uploadProductImage,
 } = require('../controllers/productController');
 const { extractProductImport, confirmImport } = require('../controllers/productImportController');
+const { getCategories, createCategory, deleteCategory } = require('../controllers/categoryController');
 const { authenticateToken, requireRole } = require('../middleware/auth');
 const validate = require('../middleware/validate');
 
@@ -107,6 +108,19 @@ router.post(
   extractProductImport
 );
 router.post('/import/confirm', authenticateToken, requireRole(['admin', 'sales_rep']), confirmImport);
+
+// Before '/:id', or "categories" is read as a product id.
+router.get('/categories', authenticateToken, getCategories);
+router.post(
+  '/categories',
+  authenticateToken,
+  requireRole(['admin', 'sales_rep']),
+  body('name').isString().trim().notEmpty().withMessage('A category name is required'),
+  validate,
+  createCategory
+);
+router.delete('/categories/:id', authenticateToken, requireRole(['admin', 'sales_rep']), deleteCategory);
+
 router.get('/', authenticateToken, getAllProducts);
 router.get('/:id', authenticateToken, getProductById);
 router.post('/', authenticateToken, requireRole(['admin', 'sales_rep']), createProductRules, validate, createProduct);

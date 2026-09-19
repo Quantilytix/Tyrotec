@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import Button from '../ui/Button';
+import CategorySelect from './CategorySelect';
 import { uploadProductImage } from '../../api/products';
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
@@ -25,7 +26,7 @@ const FIELD_CLASS =
   'mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none transition-colors duration-150 focus:border-teal-500';
 const LABEL_CLASS = 'block text-xs font-medium text-slate-600';
 
-export default function ProductForm({ initialProduct, onSubmit, onCancel }) {
+export default function ProductForm({ initialProduct, onSubmit, onCancel, categories = [], onCreateCategory }) {
   const [form, setForm] = useState(() =>
     initialProduct
       ? {
@@ -115,7 +116,15 @@ export default function ProductForm({ initialProduct, onSubmit, onCancel }) {
         </div>
         <div>
           <label className={LABEL_CLASS}>Category</label>
-          <input required value={form.category} onChange={update('category')} className={FIELD_CLASS} />
+          <CategorySelect
+            value={form.category}
+            onChange={(category) => setForm((prev) => ({ ...prev, category }))}
+            categories={categories}
+            onCreateCategory={onCreateCategory}
+            className="mt-1"
+            selectClassName={FIELD_CLASS.replace('mt-1 ', '')}
+            required
+          />
         </div>
       </div>
 

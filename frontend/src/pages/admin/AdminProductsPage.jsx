@@ -9,16 +9,20 @@ import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import Card from '../../components/ui/Card';
 import ProductForm from '../../components/admin/ProductForm';
 import ProductImportModal from '../../components/admin/ProductImportModal';
+import CategoryManager from '../../components/admin/CategoryManager';
+import useCategories from '../../hooks/useCategories';
 
 export default function AdminProductsPage() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [category, setCategory] = useState('');
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const limit = 20;
+  const { categories, addCategory, removeCategory } = useCategories();
 
-  const [modalMode, setModalMode] = useState(null); // null | 'create' | 'edit' | 'import' | 'supplier'
+  const [modalMode, setModalMode] = useState(null); // null | 'create' | 'edit' | 'import' | 'supplier' | 'categories'
   const [editingProduct, setEditingProduct] = useState(null);
   const [deleteError, setDeleteError] = useState('');
   const [deletingId, setDeletingId] = useState(null);
@@ -26,7 +30,7 @@ export default function AdminProductsPage() {
 
   const load = () => {
     setLoading(true);
-    return getProducts({ search, page, limit })
+    return getProducts({ search, category: category || undefined, page, limit })
       .then(({ data }) => {
         setProducts(data.data);
         setTotal(data.total);
@@ -38,7 +42,7 @@ export default function AdminProductsPage() {
     const timeout = setTimeout(load, 300);
     return () => clearTimeout(timeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, page]);
+  }, [search, category, page]);
 
   const totalPages = Math.max(Math.ceil(total / limit), 1);
 
@@ -103,6 +107,22 @@ export default function AdminProductsPage() {
             placeholder="Search by name or SKU"
             className="w-64 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition-colors duration-150 focus:border-teal-500"
           />
+          <select
+            value={category}
+            onChange={(e) => {
+              setPage(1);
+              setCategory(e.target.value);
+            }}
+            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition-colors duration-150 focus:border-teal-500"
+          >
+            <option value="">All categories</option>
+            {categories.map((c) => (
+              <option key={c.id} value={c.name}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+          <Button variant="secondary" onClick={() => setModalMode('categories')}>Manage categories</Button>
           <Button variant="secondary" onClick={openImport}>Import from file</Button>
           <Button onClick={openCreate}>Add product</Button>
         </div>
@@ -198,13 +218,29 @@ export default function AdminProductsPage() {
 
       {(modalMode === 'create' || modalMode === 'edit') && (
         <Modal title={modalMode === 'edit' ? 'Edit product' : 'Add product'} onClose={closeModal}>
-          <ProductForm initialProduct={editingProduct} onSubmit={handleSubmit} onCancel={closeModal} />
+          <ProductForm
+            initialProduct={editingProduct}
+            onSubmit={handleSubmit}
+            onCancel={closeModal}
+            categories={categories}
+            onCreateCategory={addCategory}
+          />
         </Modal>
       )}
 
       {modalMode === 'import' && (
         <Modal title="Import products from file" onClose={closeModal} wide>
-          <ProductImportModal onDone={handleImportDone} />
+          <ProductImportModal
+            onDone={handleImportDone}
+            categories={categories}
+            onCreateCategory={addCategory}
+          />
+        </Modal>
+      )}
+
+      {modalMode === 'categories' && (
+        <Modal title="Manage categories" onClose={closeModal}>
+          <CategoryManager categories={categories} onAdd={addCategory} onRemove={removeCategory} />
         </Modal>
       )}
 

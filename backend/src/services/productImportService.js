@@ -1,5 +1,6 @@
 const supabase = require('../config/supabase');
 const { notifyIfLowStockCrossing } = require('../controllers/productController');
+const { listCategoryNames } = require('./categoryService');
 
 const DEFAULT_AVAILABILITY = 'local';
 const DEFAULT_LEAD_TIME_DAYS = 7;
@@ -48,6 +49,11 @@ async function confirmProductImport(rows) {
   const created = [];
   const errors = [];
 
+  // Read once for the whole batch rather than per row: an import is commonly
+  // dozens of rows, and the category list doesn't change mid-import.
+  const categoryNames = await listCategoryNames();
+  const categoryByLower = new Map(categoryNames.map((name) => [name.toLowerCase(), name]));
+
   for (const row of rows) {
     if (row.action === 'skip') continue;
 
@@ -72,13 +78,25 @@ async function confirmProductImport(rows) {
         await notifyIfLowStockCrossing(existing.stock_quantity, updated);
         restocked.push(updated);
       } else if (row.action === 'create') {
+        // Imports are the other door into the catalogue, so they hold to the
+        // same rule as the product form: a new product's category comes from
+        // the managed list (stored with the list's own spelling).
+        const category = categoryByLower.get(String(row.category || '').trim().toLowerCase());
+        if (!category) {
+          throw new Error(
+            row.category
+              ? `"${row.category}" is not one of the product categories`
+              : 'Pick a category for this row'
+          );
+        }
+
         const { data: inserted, error: insertErr } = await supabase
           .from('products')
           .insert([
             {
               sku: row.sku,
               name: row.name,
-              category: row.category || 'uncategorized',
+              category,
               description: row.description || null,
               unit_price: row.unit_price,
               stock_quantity: row.quantity || 0,

@@ -3,6 +3,7 @@ const ExcelJS = require('exceljs');
 const asyncHandler = require('../utils/asyncHandler');
 const { extractFromReceipt, extractFromSpreadsheet } = require('../services/geminiImportService');
 const { matchExtractedRows, confirmProductImport } = require('../services/productImportService');
+const { listCategoryNames } = require('../services/categoryService');
 
 const SPREADSHEET_MIMETYPES = [
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
@@ -35,13 +36,17 @@ async function parseSpreadsheetBuffer(buffer, mimeType) {
 const extractProductImport = asyncHandler(async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file provided' });
 
+  // The live category list is handed to the extractor so it labels rows with
+  // the categories this business actually uses, instead of inventing its own.
+  const categories = await listCategoryNames();
+
   let rows;
   try {
     if (SPREADSHEET_MIMETYPES.includes(req.file.mimetype)) {
       const parsedRows = await parseSpreadsheetBuffer(req.file.buffer, req.file.mimetype);
-      rows = await extractFromSpreadsheet(parsedRows);
+      rows = await extractFromSpreadsheet(parsedRows, categories);
     } else {
-      rows = await extractFromReceipt(req.file.buffer, req.file.mimetype);
+      rows = await extractFromReceipt(req.file.buffer, req.file.mimetype, categories);
     }
   } catch (err) {
     return res.status(422).json({ error: err.message || "Couldn't read that file." });

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import Button from '../ui/Button';
+import CategorySelect from './CategorySelect';
 import { extractProductImport, confirmProductImport } from '../../api/products';
 
 const DEFAULT_AVAILABILITY = 'local';
@@ -21,7 +22,7 @@ function toReviewRow(row) {
   };
 }
 
-export default function ProductImportModal({ onDone }) {
+export default function ProductImportModal({ onDone, categories = [], onCreateCategory }) {
   const [step, setStep] = useState('upload'); // 'upload' | 'review'
   const [file, setFile] = useState(null);
   const [extracting, setExtracting] = useState(false);
@@ -130,7 +131,8 @@ export default function ProductImportModal({ onDone }) {
   return (
     <div className="space-y-4">
       <p className="text-sm text-slate-500">
-        Review what Gemini found, adjust anything that looks wrong, then confirm to save.
+        Review what Gemini found, adjust anything that looks wrong, then confirm to save. Every new product
+        needs a SKU and a category.
       </p>
 
       <div className="max-h-[50vh] overflow-auto rounded-lg border border-slate-200">
@@ -176,7 +178,20 @@ export default function ProductImportModal({ onDone }) {
                   />
                 </td>
                 <td className="px-3 py-2">
-                  <input value={row.category} onChange={(e) => updateRow(i, 'category', e.target.value)} className={CELL_INPUT} />
+                  {/* Only a new product needs a category; a restock keeps the
+                      one already on the matched product. */}
+                  {row.action === 'create' ? (
+                    <CategorySelect
+                      value={row.category}
+                      onChange={(category) => updateRow(i, 'category', category)}
+                      categories={categories}
+                      onCreateCategory={onCreateCategory}
+                      selectClassName={`${CELL_INPUT} min-w-[11rem]`}
+                      placeholder="Pick a category"
+                    />
+                  ) : (
+                    <span className="text-slate-300">--</span>
+                  )}
                 </td>
                 <td className="px-3 py-2">
                   <input
@@ -253,7 +268,10 @@ export default function ProductImportModal({ onDone }) {
         <Button
           onClick={handleConfirm}
           loading={confirming}
-          disabled={rows.every((r) => r.action === 'skip') || rows.some((r) => r.action === 'create' && !r.sku)}
+          disabled={
+            rows.every((r) => r.action === 'skip') ||
+            rows.some((r) => r.action === 'create' && (!r.sku || !r.category))
+          }
         >
           Confirm import
         </Button>

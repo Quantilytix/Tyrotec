@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getProducts } from '../api/products';
+import useCategories from '../hooks/useCategories';
 import { useCart } from '../context/CartContext';
 import { formatCurrency } from '../utils/formatters';
 import Button from '../components/ui/Button';
@@ -11,16 +12,18 @@ export default function ProductsPage() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [category, setCategory] = useState('');
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const limit = 20;
+  const { categories } = useCategories();
   const { addItem, items } = useCart();
   const [quantities, setQuantities] = useState({});
 
   useEffect(() => {
     const timeout = setTimeout(() => {
       setLoading(true);
-      getProducts({ search, page, limit })
+      getProducts({ search, category: category || undefined, page, limit })
         .then(({ data }) => {
           setProducts(data.data);
           setTotal(data.total);
@@ -29,7 +32,7 @@ export default function ProductsPage() {
     }, 300); // debounce search input
 
     return () => clearTimeout(timeout);
-  }, [search, page]);
+  }, [search, category, page]);
 
   const getQuantity = (product) => quantities[product.id] ?? 1;
 
@@ -61,16 +64,33 @@ export default function ProductsPage() {
           <h1 className="font-display text-xl font-semibold text-ink">Products</h1>
           <p className="mt-1 text-sm text-slate-500">Browse the catalog and add items to your quote.</p>
         </div>
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => {
-            setPage(1);
-            setSearch(e.target.value);
-          }}
-          placeholder="Search by name or SKU"
-          className="w-64 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition-colors duration-150 focus:border-teal-500"
-        />
+        <div className="flex items-center gap-3">
+          <select
+            value={category}
+            onChange={(e) => {
+              setPage(1);
+              setCategory(e.target.value);
+            }}
+            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition-colors duration-150 focus:border-teal-500"
+          >
+            <option value="">All categories</option>
+            {categories.map((c) => (
+              <option key={c.id} value={c.name}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => {
+              setPage(1);
+              setSearch(e.target.value);
+            }}
+            placeholder="Search by name or SKU"
+            className="w-64 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition-colors duration-150 focus:border-teal-500"
+          />
+        </div>
       </div>
 
       {loading ? (
@@ -79,7 +99,13 @@ export default function ProductsPage() {
         <div className="mt-6">
           <EmptyState
             title="No products found"
-            description={search ? `Nothing matches "${search}".` : 'The catalog is empty right now.'}
+            description={
+              search || category
+                ? `Nothing matches ${[search && `"${search}"`, category && `the ${category} category`]
+                    .filter(Boolean)
+                    .join(' in ')}.`
+                : 'The catalog is empty right now.'
+            }
           />
         </div>
       ) : (
