@@ -17,6 +17,7 @@ const adminReviewRoutes = require('./routes/adminReviewRoutes');
 const activityLogRoutes = require('./routes/activityLogRoutes');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 const { startInProcessJobs } = require('./jobs/inProcessScheduler');
+const { isEnabled } = require('./utils/envFlag');
 
 const app = express();
 
@@ -121,10 +122,16 @@ const server = app.listen(PORT, () => {
 
   // Hosting without scheduled jobs (Render Free) runs the reservation jobs
   // here instead -- see jobs/inProcessScheduler.js for why only one instance
-  // may have this on.
-  if (process.env.RUN_JOBS_IN_PROCESS === 'true') {
+  // may have this on. Says so either way: a silent "off" looks identical to a
+  // working job until stock quietly stays reserved for days.
+  if (isEnabled(process.env.RUN_JOBS_IN_PROCESS)) {
     startInProcessJobs();
     console.log('Reservation warning/release jobs running in-process every 5 minutes.');
+  } else {
+    console.warn(
+      `Reservation jobs are OFF (RUN_JOBS_IN_PROCESS=${JSON.stringify(process.env.RUN_JOBS_IN_PROCESS ?? null)}). ` +
+        'Expired stock reservations will not be released. Set it to "true", or run the cron jobs.'
+    );
   }
 });
 
