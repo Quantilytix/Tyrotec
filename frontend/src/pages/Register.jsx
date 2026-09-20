@@ -11,6 +11,7 @@ export default function Register() {
   const [accountType, setAccountType] = useState('customer');
   const [companyName, setCompanyName] = useState('');
   const [vatNumber, setVatNumber] = useState('');
+  const [isVatRegistered, setIsVatRegistered] = useState(false);
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -33,7 +34,8 @@ export default function Register() {
         isStaffSignup ? 'sales_rep' : 'customer',
         isStaffSignup ? fullName : null,
         phone || null,
-        isStaffSignup ? null : vatNumber || null
+        isStaffSignup ? null : vatNumber || null,
+        isStaffSignup ? false : isVatRegistered
       );
       if (result?.pending) {
         setPendingMessage(result.message);
@@ -110,14 +112,28 @@ export default function Register() {
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-slate-600">VAT number (optional)</label>
-                    <input
-                      type="text"
-                      value={vatNumber}
-                      onChange={(e) => setVatNumber(e.target.value)}
-                      className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none transition-colors duration-150 focus:border-teal-500"
-                      placeholder="If your business is VAT-registered"
-                    />
+                    {/* Prices exclude VAT and VAT is charged either way; this
+                        records who can claim it back, and puts their VAT
+                        number on their quotes and receipts. */}
+                    <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
+                      <input
+                        type="checkbox"
+                        checked={isVatRegistered}
+                        onChange={(e) => setIsVatRegistered(e.target.checked)}
+                        className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+                      />
+                      My business is VAT-registered
+                    </label>
+                    {isVatRegistered && (
+                      <input
+                        type="text"
+                        required
+                        value={vatNumber}
+                        onChange={(e) => setVatNumber(e.target.value)}
+                        className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none transition-colors duration-150 focus:border-teal-500"
+                        placeholder="VAT number"
+                      />
+                    )}
                   </div>
                 </>
               )}

@@ -33,8 +33,17 @@ export function AuthProvider({ children }) {
     return data.user;
   };
 
-  const register = async (email, password, companyName, role, fullName, phone, vatNumber) => {
-    const { data } = await registerRequest(email, password, companyName, role, fullName, phone, vatNumber);
+  const register = async (email, password, companyName, role, fullName, phone, vatNumber, isVatRegistered) => {
+    const { data } = await registerRequest(
+      email,
+      password,
+      companyName,
+      role,
+      fullName,
+      phone,
+      vatNumber,
+      isVatRegistered
+    );
     // A staff (sales_rep) signup lands as 'pending' -- there's no session to
     // log in with yet, it's awaiting admin approval. Only customer signups
     // (the default) get an immediate session.

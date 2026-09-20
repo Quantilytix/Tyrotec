@@ -39,6 +39,7 @@ const WRITABLE_FIELDS = [
   'category',
   'description',
   'unit_price',
+  'vat_applicable',
   'stock_quantity',
   'availability',
   'lead_time_days',

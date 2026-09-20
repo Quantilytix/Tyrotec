@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react';
+import { documentTotals, rateForProduct, VAT_RATE } from '../utils/vat';
 
 const CartContext = createContext(null);
 const STORAGE_KEY = 'jamlea_cart_items';
@@ -11,7 +12,12 @@ function loadStoredItems() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) return [];
+    // A cart saved before VAT-exclusive pricing has no rate on its lines.
+    // Default those to the standard rate rather than showing the customer a
+    // VAT-free total the server won't honour; the server prices it properly
+    // on submit either way.
+    return parsed.map((item) => ({ ...item, vat_rate: item.vat_rate ?? VAT_RATE }));
   } catch {
     return [];
   }
@@ -49,7 +55,11 @@ export function CartProvider({ children }) {
           product_id: product.id,
           name: product.name,
           sku: product.sku,
+          // Excl VAT, with the rate this product carries. Both are only for
+          // showing the customer what they're building: the server prices the
+          // quote again from the product record when it's submitted.
           unit_price: product.unit_price,
+          vat_rate: rateForProduct(product),
           quantity,
         },
       ];
@@ -68,12 +78,16 @@ export function CartProvider({ children }) {
 
   const clearCart = () => setItems([]);
 
-  const totalAmount = items.reduce((sum, i) => sum + i.unit_price * i.quantity, 0);
+  // Prices are excl VAT, so the cart shows the same three figures a quote
+  // does. totalAmount stays the VAT-inclusive grand total, which is what the
+  // customer actually pays.
+  const totals = documentTotals(items);
+  const totalAmount = totals.total_amount;
   const totalItems = items.reduce((sum, i) => sum + i.quantity, 0);
 
   return (
     <CartContext.Provider
-      value={{ items, addItem, updateQuantity, removeItem, clearCart, totalAmount, totalItems }}
+      value={{ items, addItem, updateQuantity, removeItem, clearCart, totals, totalAmount, totalItems }}
     >
       {children}
     </CartContext.Provider>

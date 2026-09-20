@@ -30,7 +30,7 @@ async function startCategoryList(phone, purpose, items = []) {
 async function sendProductPage(phone, category, page, purpose, items = []) {
   const { data: products, error } = await supabase
     .from('products')
-    .select('id, name, sku, unit_price, stock_quantity')
+    .select('id, name, sku, unit_price, vat_applicable, stock_quantity')
     .eq('category', category)
     .order('name', { ascending: true });
 
@@ -45,7 +45,7 @@ async function sendProductPage(phone, category, page, purpose, items = []) {
   const rows = pageItems.map((p) => ({
     id: `prod_${p.id}`,
     title: p.name.slice(0, 24),
-    description: `${formatCurrency(p.unit_price)} · ${p.stock_quantity > 0 ? `${p.stock_quantity} in stock` : 'out of stock'}`,
+    description: `${formatCurrency(p.unit_price)} excl. VAT · ${p.stock_quantity > 0 ? `${p.stock_quantity} in stock` : 'out of stock'}`,
   }));
   if (hasNext) rows.push({ id: 'page_next', title: 'Next page →' });
 
@@ -80,7 +80,7 @@ async function handle(conversation, message) {
       const productId = choice.slice('prod_'.length);
       const { data: product, error } = await supabase
         .from('products')
-        .select('id, name, sku, description, unit_price, stock_quantity')
+        .select('id, name, sku, description, unit_price, vat_applicable, stock_quantity')
         .eq('id', productId)
         .single();
 
@@ -94,17 +94,17 @@ async function handle(conversation, message) {
           await sendText(phone, `${product.name} is currently out of stock. Pick another product, or reply "menu" to go back.`);
           return sendProductPage(phone, context.category, context.page || 0, context.purpose, context.items || []);
         }
-        await sendText(phone, `${product.name} (${formatCurrency(product.unit_price)}). How many would you like?`);
+        await sendText(phone, `${product.name} (${formatCurrency(product.unit_price)} excl. VAT). How many would you like?`);
         return {
           newState: 'quote_awaiting_quantity',
-          newContext: { items: context.items || [], pendingProduct: { id: product.id, name: product.name, unit_price: product.unit_price, stock_quantity: product.stock_quantity } },
+          newContext: { items: context.items || [], pendingProduct: { id: product.id, name: product.name, unit_price: product.unit_price, vat_applicable: product.vat_applicable, stock_quantity: product.stock_quantity } },
         };
       }
 
       // purpose 'view' -- just show details, then back to the main menu.
       await sendText(
         phone,
-        `*${product.name}* (${product.sku})\n${product.description || ''}\n\nPrice: ${formatCurrency(product.unit_price)}\nStock: ${product.stock_quantity > 0 ? `${product.stock_quantity} available` : 'out of stock'}`
+        `*${product.name}* (${product.sku})\n${product.description || ''}\n\nPrice: ${formatCurrency(product.unit_price)} excl. VAT\nStock: ${product.stock_quantity > 0 ? `${product.stock_quantity} available` : 'out of stock'}`
       );
       const { sendMenu } = require('./mainMenu');
       await sendMenu(phone, 'Reply "menu" any time to come back here. What next?');

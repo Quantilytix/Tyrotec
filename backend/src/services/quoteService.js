@@ -1,6 +1,7 @@
 const supabase = require('../config/supabase');
 const { notifyInternalTeam } = require('./notificationService');
 const { formatCurrency } = require('../utils/formatCurrency');
+const { documentTotals, rateForProduct } = require('../utils/vat');
 
 // Core logic behind creating a quote, shared by the portal's POST /quotes
 // route and the WhatsApp quoteBuilding flow -- two front doors onto the same
@@ -14,7 +15,7 @@ async function createQuoteForCustomer(customerId, customerLabel, items, source =
   const productIds = items.map((i) => i.product_id);
   const { data: products, error: pErr } = await supabase
     .from('products')
-    .select('id, unit_price')
+    .select('id, unit_price, vat_applicable')
     .in('id', productIds);
 
   if (pErr) throw pErr;
@@ -22,22 +23,28 @@ async function createQuoteForCustomer(customerId, customerLabel, items, source =
     return { error: 'One or more products were not found', status: 400 };
   }
 
-  const priceMap = new Map(products.map((p) => [p.id, p.unit_price]));
+  const productMap = new Map(products.map((p) => [p.id, p]));
 
-  let total_amount = 0;
+  // Prices are excl VAT, and the rate comes from the product, never from the
+  // request -- a client can't talk the server out of charging VAT. The rate is
+  // stored on the line so the document always states what it actually charged.
   const quoteItemsData = items.map((item) => {
-    const price = priceMap.get(item.product_id);
-    total_amount += price * item.quantity;
+    const product = productMap.get(item.product_id);
     return {
       product_id: item.product_id,
       quantity: item.quantity,
-      unit_price: price,
+      unit_price: product.unit_price,
+      vat_rate: rateForProduct(product),
     };
   });
 
+  const { subtotal_amount, vat_amount, total_amount } = documentTotals(quoteItemsData);
+
   const { data: quote, error: qErr } = await supabase
     .from('quotes')
-    .insert([{ customer_id: customerId, total_amount, status: 'submitted', source }])
+    .insert([
+      { customer_id: customerId, subtotal_amount, vat_amount, total_amount, status: 'submitted', source },
+    ])
     .select()
     .single();
 
@@ -75,9 +82,22 @@ async function convertQuoteForCustomer(customerId, customerLabel, quoteId, sourc
   if (quote.status === 'converted') return { error: 'Quote already converted', status: 400 };
   if (quote.status === 'expired') return { error: 'Quote has expired', status: 400 };
 
+  // Carries the quote's own figures across rather than recalculating: an
+  // order must charge what the customer was quoted, even if a product's price
+  // or VAT setting has changed since. Legacy quotes have null subtotal/VAT,
+  // and the order inherits that, staying VAT-inclusive like its quote.
   const { data: order, error: oErr } = await supabase
     .from('orders')
-    .insert([{ quote_id: quote.id, customer_id: customerId, total_amount: quote.total_amount, source }])
+    .insert([
+      {
+        quote_id: quote.id,
+        customer_id: customerId,
+        subtotal_amount: quote.subtotal_amount,
+        vat_amount: quote.vat_amount,
+        total_amount: quote.total_amount,
+        source,
+      },
+    ])
     .select()
     .single();
 
@@ -88,6 +108,7 @@ async function convertQuoteForCustomer(customerId, customerLabel, quoteId, sourc
     product_id: qi.product_id,
     quantity: qi.quantity,
     unit_price: qi.unit_price,
+    vat_rate: qi.vat_rate,
   }));
 
   const { error: oiErr } = await supabase.from('order_items').insert(orderItems);

@@ -40,18 +40,40 @@ describe('getReceiptPayment', () => {
 });
 
 describe('receiptTotals', () => {
-  it('breaks 15% VAT back out of a VAT-inclusive total', () => {
-    expect(receiptTotals(340, 340)).toEqual({ subtotalExclVat: 295.65, vat: 44.35, total: 340, paid: 340, balance: 0 });
+  // Prices are quoted excluding VAT, so the receipt states the VAT the order
+  // actually charged rather than deriving it from the total.
+  it('uses the order\'s own stored VAT figures', () => {
+    const order = { subtotal_amount: 200, vat_amount: 30, total_amount: 230 };
+    expect(receiptTotals(order, 230)).toEqual({
+      subtotalExclVat: 200,
+      vat: 30,
+      total: 230,
+      paid: 230,
+      balance: 0,
+      legacy: false,
+    });
+  });
+
+  // Orders placed before VAT-exclusive pricing have no stored breakdown: their
+  // prices included VAT, and the receipt must keep printing as it always did.
+  it('works a legacy order\'s VAT back out of its inclusive total', () => {
+    expect(receiptTotals({ total_amount: 340 }, 340)).toMatchObject({
+      subtotalExclVat: 295.65,
+      vat: 44.35,
+      total: 340,
+      legacy: true,
+    });
   });
 
   it('keeps subtotal + VAT equal to the total to the cent', () => {
-    const t = receiptTotals(47970.5, 47970.5);
+    const t = receiptTotals({ total_amount: 47970.5 }, 47970.5);
     expect(Math.round((t.subtotalExclVat + t.vat) * 100)).toBe(4797050);
   });
 
   it('reports an outstanding balance for a short payment, never a negative one for an overpayment', () => {
-    expect(receiptTotals(2000, 1500).balance).toBe(500);
-    expect(receiptTotals(2000, 2500).balance).toBe(0);
+    const order = { subtotal_amount: 1739.13, vat_amount: 260.87, total_amount: 2000 };
+    expect(receiptTotals(order, 1500).balance).toBe(500);
+    expect(receiptTotals(order, 2500).balance).toBe(0);
   });
 });
 

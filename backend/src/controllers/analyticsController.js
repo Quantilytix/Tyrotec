@@ -1,4 +1,5 @@
 const supabase = require('../config/supabase');
+const { displayTotals } = require('../utils/vat');
 const asyncHandler = require('../utils/asyncHandler');
 
 const QUOTE_STATUSES = ['draft', 'submitted', 'converted', 'expired'];
@@ -101,7 +102,7 @@ const getAnalyticsSummary = asyncHandler(async (req, res) => {
 
   const { data: orders, error: ordersErr } = await supabase
     .from('orders')
-    .select('status, total_amount, created_at, source')
+    .select('status, total_amount, subtotal_amount, vat_amount, created_at, source')
     .gte('created_at', fromISO)
     .lt('created_at', toExclusiveISO);
   if (ordersErr) throw ordersErr;
@@ -110,13 +111,18 @@ const getAnalyticsSummary = asyncHandler(async (req, res) => {
   const sellableOrders = orders.filter((o) => !SPEND_EXCLUDED_STATUSES.includes(o.status));
   for (const o of orders) orderCounts[o.status] = (orderCounts[o.status] || 0) + 1;
 
-  const revenueTotal = sellableOrders.reduce((sum, o) => sum + Number(o.total_amount || 0), 0);
+  // Revenue is reported excluding VAT: the VAT portion is collected on SARS's
+  // behalf, not earned. Legacy VAT-inclusive orders have it worked back out
+  // (displayTotals), so a period spanning the pricing change still adds up.
+  const netOf = (order) => displayTotals(order).subtotal_amount;
+
+  const revenueTotal = sellableOrders.reduce((sum, o) => sum + netOf(o), 0);
   const averageOrderValue = sellableOrders.length > 0 ? revenueTotal / sellableOrders.length : 0;
 
   const revenueByDate = new Map();
   for (const o of sellableOrders) {
     const date = o.created_at.slice(0, 10);
-    revenueByDate.set(date, (revenueByDate.get(date) || 0) + Number(o.total_amount || 0));
+    revenueByDate.set(date, (revenueByDate.get(date) || 0) + netOf(o));
   }
   const revenueOverTime = datesBetween(from, to).map((date) => ({ date, revenue: revenueByDate.get(date) || 0 }));
 
@@ -147,7 +153,7 @@ const getAnalyticsSummary = asyncHandler(async (req, res) => {
   // selected range, same as every other section.
   const { data: customers, error: custErr } = await supabase
     .from('users')
-    .select('id, email, company_name, created_at, orders(status, total_amount, created_at)')
+    .select('id, email, company_name, created_at, orders(status, total_amount, subtotal_amount, vat_amount, created_at)')
     .eq('role', 'customer');
   if (custErr) throw custErr;
 
@@ -159,7 +165,8 @@ const getAnalyticsSummary = asyncHandler(async (req, res) => {
       email: c.email,
       company_name: c.company_name,
       order_count: inRangeOrders.length,
-      total_spent: countedOrders.reduce((sum, o) => sum + Number(o.total_amount || 0), 0),
+      // Excl VAT, so top customers tie up with the revenue figures above.
+      total_spent: countedOrders.reduce((sum, o) => sum + displayTotals(o).subtotal_amount, 0),
     };
   });
 

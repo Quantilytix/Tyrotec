@@ -9,6 +9,7 @@ const EMPTY = {
   sku: '',
   name: '',
   category: '',
+  vat_applicable: true,
   description: '',
   unit_price: '',
   stock_quantity: '',
@@ -33,6 +34,7 @@ export default function ProductForm({ initialProduct, onSubmit, onCancel, catego
           sku: initialProduct.sku,
           name: initialProduct.name,
           category: initialProduct.category,
+          vat_applicable: initialProduct.vat_applicable !== false,
           description: initialProduct.description || '',
           unit_price: initialProduct.unit_price,
           stock_quantity: initialProduct.stock_quantity,
@@ -88,6 +90,7 @@ export default function ProductForm({ initialProduct, onSubmit, onCancel, catego
         sku: form.sku,
         name: form.name,
         category: form.category,
+        vat_applicable: form.vat_applicable,
         description: form.description || null,
         unit_price: Number(form.unit_price),
         stock_quantity: Number(form.stock_quantity),
@@ -140,7 +143,7 @@ export default function ProductForm({ initialProduct, onSubmit, onCancel, catego
 
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className={LABEL_CLASS}>Unit price</label>
+          <label className={LABEL_CLASS}>Unit price (excl. VAT)</label>
           <input
             required
             type="number"
@@ -150,6 +153,17 @@ export default function ProductForm({ initialProduct, onSubmit, onCancel, catego
             onChange={update('unit_price')}
             className={FIELD_CLASS}
           />
+          {/* VAT is a property of the goods, not the customer: leave this on
+              unless the product is genuinely zero-rated or exempt. */}
+          <label className="mt-2 flex items-center gap-2 text-xs text-slate-600">
+            <input
+              type="checkbox"
+              checked={form.vat_applicable}
+              onChange={(e) => setForm((prev) => ({ ...prev, vat_applicable: e.target.checked }))}
+              className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+            />
+            Add 15% VAT to this product
+          </label>
         </div>
         <div>
           <label className={LABEL_CLASS}>Stock quantity</label>

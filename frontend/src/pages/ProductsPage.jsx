@@ -152,6 +152,9 @@ export default function ProductsPage() {
                   <div className="mt-4 flex items-end justify-between border-t border-slate-100 pt-3">
                     <div>
                       <p className="font-mono text-lg font-semibold text-ink">{formatCurrency(product.unit_price)}</p>
+                      <p className="text-xs text-slate-400">
+                        {product.vat_applicable === false ? 'No VAT' : 'excl. VAT'}
+                      </p>
                     </div>
                     <div className="flex items-center gap-2">
                       <input

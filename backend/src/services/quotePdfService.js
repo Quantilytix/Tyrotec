@@ -3,6 +3,7 @@ const path = require('path');
 const { jsPDF } = require('jspdf');
 const autoTable = require('jspdf-autotable').default;
 const { formatCurrency } = require('../utils/formatCurrency');
+const { displayTotals, lineTotals, VAT_RATE } = require('../utils/vat');
 
 // Same layout as the portal's own "Download quote" feature
 // (frontend/src/utils/generateQuotePdf.js -- keep the two in sync), adapted
@@ -202,7 +203,10 @@ function buildCompanyLines() {
   return lines;
 }
 
-function drawTotalsBox(doc, x, y, totalAmount) {
+// Subtotal and VAT above the amount due: prices are quoted excluding VAT, so
+// the customer -- and a VAT-registered one's accountant -- has to see the VAT
+// portion. Matches frontend/src/utils/generateQuotePdf.js.
+function drawTotalsBox(doc, x, y, totals) {
   const width = 80;
   const height = 26;
   doc.setFillColor(...NAVY_TINT);
@@ -213,12 +217,30 @@ function drawTotalsBox(doc, x, y, totalAmount) {
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(7.5);
   doc.setTextColor(...GRAY);
-  doc.text('TOTAL DUE (INCL. VAT)', x + 6, y + 8);
+  doc.text('SUBTOTAL (EXCL. VAT)', x + 6, y + 8);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.setTextColor(...INK);
+  doc.text(formatCurrency(totals.subtotal_amount), x + width - 6, y + 8, { align: 'right' });
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7.5);
+  doc.setTextColor(...GRAY);
+  doc.text('VAT', x + 6, y + 15);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.setTextColor(...INK);
+  doc.text(formatCurrency(totals.vat_amount), x + width - 6, y + 15, { align: 'right' });
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7.5);
+  doc.setTextColor(...GRAY);
+  doc.text('TOTAL DUE (INCL. VAT)', x + 6, y + 25);
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(16);
   doc.setTextColor(...NAVY);
-  doc.text(formatCurrency(totalAmount), x + 6, y + 18);
+  doc.text(formatCurrency(totals.total_amount), x + 6, y + 34);
 
   return y + height;
 }
@@ -232,7 +254,7 @@ function drawTerms(doc, x, y) {
 
   const notes = [
     'This quotation is valid for 14 days from the date issued.',
-    'All prices include VAT unless otherwise stated.',
+    'All prices exclude VAT. VAT is shown per line and in the totals.',
     'Please quote the number above when confirming or paying.',
   ];
   doc.setFont('helvetica', 'normal');
@@ -298,13 +320,14 @@ function generateQuotePdfBuffer({ quote, items, customer, channel = 'WhatsApp' }
 
   autoTable(doc, {
     startY: Math.max(leftPanelY, rightPanelY) + 6,
-    head: [['Product', 'SKU', 'Unit Price', 'Qty', 'Subtotal']],
+    head: [['Product', 'SKU', 'Unit Price', 'Qty', 'VAT', 'Line Total']],
     body: items.map((item) => [
       item.products?.name || '',
       item.products?.sku || '',
       formatCurrency(item.unit_price),
       String(item.quantity),
-      formatCurrency(item.unit_price * item.quantity),
+      item.vat_rate === null || item.vat_rate === undefined ? 'incl.' : Number(item.vat_rate) > 0 ? `${Number(item.vat_rate)}%` : '--',
+      formatCurrency(lineTotals(item).net),
     ]),
     margin: { left: MARGIN, right: MARGIN, bottom: 26 },
     headStyles: { fillColor: NAVY, textColor: 255, fontStyle: 'bold', fontSize: 9 },
@@ -339,7 +362,7 @@ function generateQuotePdfBuffer({ quote, items, customer, channel = 'WhatsApp' }
 
   const blockY = finalY + 8;
   drawTerms(doc, MARGIN, blockY);
-  drawTotalsBox(doc, PAGE_WIDTH - MARGIN - 80, blockY - 6, quote.total_amount);
+  drawTotalsBox(doc, PAGE_WIDTH - MARGIN - 80, blockY - 6, displayTotals(quote));
 
   const totalPages = doc.internal.getNumberOfPages();
   for (let page = 1; page <= totalPages; page += 1) {

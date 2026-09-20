@@ -33,6 +33,7 @@ const registerRules = [
   body('full_name').optional({ values: 'falsy' }).isString(),
   body('phone').optional({ values: 'falsy' }).isString(),
   body('vat_number').optional({ values: 'falsy' }).isString(),
+  body('is_vat_registered').optional().isBoolean(),
 ];
 
 // Only guards the credential-guessing surface (register/login). Scoped here
@@ -80,6 +81,7 @@ const updateMeRules = [
   body('company_name').optional({ values: 'falsy' }).isString(),
   body('full_name').optional({ values: 'falsy' }).isString(),
   body('vat_number').optional({ values: 'falsy' }).isString(),
+  body('is_vat_registered').optional().isBoolean(),
   body('address').optional({ values: 'falsy' }).isString(),
 ];
 

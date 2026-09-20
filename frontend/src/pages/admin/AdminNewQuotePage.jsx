@@ -4,8 +4,10 @@ import { getAllCustomersAdmin, createCustomerAdmin } from '../../api/customers';
 import { getProducts } from '../../api/products';
 import { createQuoteForCustomerAdmin } from '../../api/quotes';
 import { formatCurrency } from '../../utils/formatters';
+import { documentTotals, lineTotals, rateForProduct, vatRateLabel } from '../../utils/vat';
 import Button from '../../components/ui/Button';
 import Card from '../../components/ui/Card';
+import TotalsSummary from '../../components/ui/TotalsSummary';
 
 const SEARCH_INPUT_CLASS =
   'w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none transition-colors duration-150 focus:border-teal-500';
@@ -96,7 +98,14 @@ export default function AdminNewQuotePage() {
       }
       return [
         ...prev,
-        { product_id: product.id, name: product.name, sku: product.sku, unit_price: product.unit_price, quantity: 1 },
+        {
+          product_id: product.id,
+          name: product.name,
+          sku: product.sku,
+          unit_price: product.unit_price,
+          vat_rate: rateForProduct(product),
+          quantity: 1,
+        },
       ];
     });
     setProductQuery('');
@@ -109,7 +118,9 @@ export default function AdminNewQuotePage() {
 
   const removeItem = (productId) => setItems((prev) => prev.filter((i) => i.product_id !== productId));
 
-  const totalAmount = items.reduce((sum, i) => sum + i.unit_price * i.quantity, 0);
+  // Preview only -- the server prices the quote again from the product
+  // records when it is created.
+  const totals = documentTotals(items);
 
   const handleSubmit = async () => {
     setError('');
@@ -264,7 +275,7 @@ export default function AdminNewQuotePage() {
             <option value="">Choose a product...</option>
             {allProducts.map((p) => (
               <option key={p.id} value={p.id}>
-                {p.name} ({p.sku}) · {formatCurrency(p.unit_price)}
+                {p.name} ({p.sku}) · {formatCurrency(p.unit_price)} excl. VAT
               </option>
             ))}
           </select>
@@ -300,9 +311,10 @@ export default function AdminNewQuotePage() {
             <thead className="border-b border-slate-100 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="py-2">Product</th>
-                <th className="py-2">Unit price</th>
+                <th className="py-2">Unit price (excl. VAT)</th>
                 <th className="py-2">Quantity</th>
-                <th className="py-2">Subtotal</th>
+                <th className="py-2">VAT</th>
+                <th className="py-2">Line total (excl. VAT)</th>
                 <th className="py-2" />
               </tr>
             </thead>
@@ -323,8 +335,9 @@ export default function AdminNewQuotePage() {
                       className="w-20 rounded-lg border border-slate-200 px-2 py-1 text-sm outline-none transition-colors duration-150 focus:border-teal-500"
                     />
                   </td>
+                  <td className="py-2 text-slate-600">{vatRateLabel(item.vat_rate)}</td>
                   <td className="py-2 font-mono font-medium text-ink">
-                    {formatCurrency(item.unit_price * item.quantity)}
+                    {formatCurrency(lineTotals(item).net)}
                   </td>
                   <td className="py-2 text-right">
                     <button
@@ -342,10 +355,7 @@ export default function AdminNewQuotePage() {
       </Card>
 
       <Card className="mt-6 flex items-center justify-between p-4">
-        <div>
-          <p className="text-xs uppercase tracking-wide text-slate-500">Total</p>
-          <p className="font-mono text-2xl font-semibold text-ink">{formatCurrency(totalAmount)}</p>
-        </div>
+        <TotalsSummary totals={totals} className="text-left" />
         <div className="flex items-center gap-3">
           {error && <p className="text-sm text-bad-500">{error}</p>}
           <Button

@@ -7,6 +7,7 @@
 // they got from registering or refreshing the page -- exactly the kind of
 // bug that's invisible until a specific field happens to be blank on a
 // specific screen.
-const PROFILE_FIELDS = 'id, email, company_name, full_name, role, status, phone, vat_number, address';
+const PROFILE_FIELDS =
+  'id, email, company_name, full_name, role, status, phone, vat_number, is_vat_registered, address';
 
 module.exports = { PROFILE_FIELDS };

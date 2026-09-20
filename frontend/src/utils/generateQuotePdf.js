@@ -1,6 +1,7 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { formatCurrency } from './formatters';
+import { documentTotals, lineTotals, vatRateLabel } from './vat';
 import {
   COMPANY,
   INK,
@@ -58,23 +59,43 @@ function drawQuoteMeta(doc, { quoteNumber, createdAt, status }) {
   }
 }
 
-function drawTotalsBox(doc, x, y, totalAmount) {
+// Subtotal and VAT above the amount due, because prices are quoted excluding
+// VAT: the customer has to be able to see what the VAT portion is, and a
+// VAT-registered one needs it to claim the input tax back.
+function drawTotalsBox(doc, x, y, totals) {
   const width = 80;
-  const height = 26;
+  const height = 40;
   doc.setFillColor(...NAVY_TINT);
   doc.setDrawColor(...NAVY);
   doc.setLineWidth(0.4);
   doc.roundedRect(x, y, width, height, 2, 2, 'FD');
 
+  const line = (label, value, lineY) => {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
+    doc.setTextColor(...GRAY);
+    doc.text(label, x + 6, lineY);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...INK);
+    doc.text(formatCurrency(value), x + width - 6, lineY, { align: 'right' });
+  };
+
+  line('Subtotal (excl. VAT)', totals.subtotal_amount, y + 8);
+  line('VAT', totals.vat_amount, y + 14.5);
+
+  doc.setDrawColor(...NAVY);
+  doc.setLineWidth(0.2);
+  doc.line(x + 6, y + 18.5, x + width - 6, y + 18.5);
+
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(7.5);
   doc.setTextColor(...GRAY);
-  doc.text('TOTAL DUE (INCL. VAT)', x + 6, y + 8);
+  doc.text('TOTAL DUE (INCL. VAT)', x + 6, y + 25);
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(16);
   doc.setTextColor(...NAVY);
-  doc.text(formatCurrency(totalAmount), x + 6, y + 18);
+  doc.text(formatCurrency(totals.total_amount), x + 6, y + 34);
 
   return y + height;
 }
@@ -88,7 +109,7 @@ function drawTerms(doc, x, y) {
 
   const notes = [
     'This quotation is valid for 14 days from the date issued.',
-    'All prices include VAT unless otherwise stated.',
+    'All prices exclude VAT. VAT is shown per line and in the totals.',
     'Please quote the number above when confirming or paying.',
   ];
   doc.setFont('helvetica', 'normal');
@@ -114,7 +135,10 @@ function drawTerms(doc, x, y) {
   return y;
 }
 
-export async function downloadQuotePdf({ items, totalAmount, customer, quoteNumber, status, createdAt }) {
+// totals: { subtotal_amount, vat_amount, total_amount } from displayTotals()
+// (or the cart). Computed from the items when a caller omits it.
+export async function downloadQuotePdf({ items, totals, customer, quoteNumber, status, createdAt }) {
+  const documentSums = totals || documentTotals(items);
   const logoDataUri = await getLogoDataUri();
   // compress: true flate-compresses PDF streams, including the embedded
   // logo -- without it jsPDF stores the logo as raw uncompressed RGBA pixel
@@ -138,13 +162,14 @@ export async function downloadQuotePdf({ items, totalAmount, customer, quoteNumb
 
   autoTable(doc, {
     startY: Math.max(leftPanelY, rightPanelY) + 6,
-    head: [['Product', 'SKU', 'Unit Price', 'Qty', 'Subtotal']],
+    head: [['Product', 'SKU', 'Unit Price', 'Qty', 'VAT', 'Line Total']],
     body: items.map((item) => [
       item.name,
       item.sku,
       formatCurrency(item.unit_price),
       String(item.quantity),
-      formatCurrency(item.unit_price * item.quantity),
+      vatRateLabel(item.vat_rate),
+      formatCurrency(lineTotals(item).net),
     ]),
     margin: { left: MARGIN, right: MARGIN, bottom: FOOTER_CLEARANCE },
     headStyles: { fillColor: NAVY, textColor: 255, fontStyle: 'bold', fontSize: 9 },
@@ -154,8 +179,9 @@ export async function downloadQuotePdf({ items, totalAmount, customer, quoteNumb
       0: { halign: 'left' },
       1: { halign: 'left' },
       2: { halign: 'right' },
-      3: { halign: 'right', cellWidth: 16 },
-      4: { halign: 'right' },
+      3: { halign: 'right', cellWidth: 14 },
+      4: { halign: 'right', cellWidth: 16 },
+      5: { halign: 'right' },
     },
     didDrawPage: (data) => {
       if (data.pageNumber > 1) {
@@ -166,14 +192,14 @@ export async function downloadQuotePdf({ items, totalAmount, customer, quoteNumb
 
   const pageHeight = doc.internal.pageSize.getHeight();
   let finalY = doc.lastAutoTable.finalY;
-  if (finalY + 45 > pageHeight - FOOTER_CLEARANCE) {
+  if (finalY + 58 > pageHeight - FOOTER_CLEARANCE) {
     doc.addPage();
     finalY = 14;
   }
 
   const blockY = finalY + 8;
   drawTerms(doc, MARGIN, blockY);
-  drawTotalsBox(doc, PAGE_WIDTH - MARGIN - 80, blockY - 6, totalAmount);
+  drawTotalsBox(doc, PAGE_WIDTH - MARGIN - 80, blockY - 6, documentSums);
 
   drawFooters(doc);
 

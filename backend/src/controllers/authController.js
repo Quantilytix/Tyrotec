@@ -11,11 +11,20 @@ const { PROFILE_FIELDS } = require('../utils/userProfileFields');
 // reviewStaffSignupAdmin. 'admin' can never be requested here; an admin can
 // promote an approved sales_rep later if needed.
 const register = asyncHandler(async (req, res) => {
-  const { email, password, company_name, full_name, role, phone, vat_number } = req.body;
+  const { email, password, company_name, full_name, role, phone, vat_number, is_vat_registered } = req.body;
   const requestedRole = role || 'customer';
 
   if (!['customer', 'sales_rep'].includes(requestedRole)) {
     return res.status(400).json({ error: "Role must be 'customer' or 'sales_rep'." });
+  }
+
+  // VAT registration doesn't change what they're charged -- Tyrotec charges
+  // VAT on standard-rated goods either way -- but a registered customer can
+  // only claim it back if their VAT number is on the document, so it's
+  // required once they say they're registered.
+  const vatRegistered = is_vat_registered === true;
+  if (vatRegistered && !String(vat_number || '').trim()) {
+    return res.status(400).json({ error: 'A VAT number is required for a VAT-registered business.' });
   }
   if (requestedRole === 'sales_rep' && !full_name) {
     return res.status(400).json({ error: 'Full name is required for a staff signup.' });
@@ -65,6 +74,7 @@ const register = asyncHandler(async (req, res) => {
         status,
         phone: normalizedPhone,
         vat_number: vat_number || null,
+        is_vat_registered: vatRegistered,
       },
       { onConflict: 'id' }
     )
@@ -196,13 +206,26 @@ const getMe = asyncHandler(async (req, res) => {
 // the account's real identity (tied to the Supabase Auth user), changing it
 // needs its own re-verification flow this endpoint doesn't attempt.
 const updateMe = asyncHandler(async (req, res) => {
-  const { phone, company_name, full_name, vat_number, address } = req.body;
+  const { phone, company_name, full_name, vat_number, is_vat_registered, address } = req.body;
 
   const patch = {};
   if (company_name !== undefined) patch.company_name = company_name || null;
   if (full_name !== undefined) patch.full_name = full_name || null;
   if (vat_number !== undefined) patch.vat_number = vat_number || null;
   if (address !== undefined) patch.address = address || null;
+
+  if (is_vat_registered !== undefined) {
+    patch.is_vat_registered = is_vat_registered === true;
+    // Same rule as registration: claiming to be registered means the VAT
+    // number has to be on file, whether it arrives in this request or is
+    // already stored.
+    if (patch.is_vat_registered) {
+      const vatNumber = vat_number !== undefined ? vat_number : req.user.vat_number;
+      if (!String(vatNumber || '').trim()) {
+        return res.status(400).json({ error: 'A VAT number is required for a VAT-registered business.' });
+      }
+    }
+  }
 
   if (phone !== undefined) {
     const normalizedPhone = normalizePhone(phone);

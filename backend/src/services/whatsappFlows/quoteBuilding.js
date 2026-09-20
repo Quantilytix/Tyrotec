@@ -1,6 +1,7 @@
 const supabase = require('../../config/supabase');
 const { sendText, sendButtons } = require('../../config/whatsapp');
 const { formatCurrency } = require('../../utils/formatCurrency');
+const { documentTotals, rateForProduct } = require('../../utils/vat');
 const { createQuoteForCustomer } = require('../quoteService');
 
 const REVIEW_BUTTONS = [
@@ -14,15 +15,30 @@ function addItem(items, product, quantity) {
   if (existing) {
     return items.map((i) => (i.product_id === product.id ? { ...i, quantity: i.quantity + quantity } : i));
   }
-  return [...items, { product_id: product.id, name: product.name, unit_price: product.unit_price, quantity }];
+  return [
+    ...items,
+    {
+      product_id: product.id,
+      name: product.name,
+      // Excl VAT, with the product's own rate -- the same rule the portal's
+      // cart uses, so the running total here matches the saved quote.
+      unit_price: product.unit_price,
+      vat_rate: rateForProduct(product),
+      quantity,
+    },
+  ];
 }
 
 async function sendReview(phone, items) {
   const lines = items.map((i) => `${i.quantity}x ${i.name} · ${formatCurrency(i.unit_price * i.quantity)}`);
-  const total = items.reduce((sum, i) => sum + i.unit_price * i.quantity, 0);
+  const { subtotal_amount, vat_amount, total_amount } = documentTotals(items);
 
   await sendButtons(phone, {
-    body: `Your quote so far:\n${lines.join('\n')}\n\nTotal: ${formatCurrency(total)}\n\nWhat next?`,
+    body:
+      `Your quote so far:\n${lines.join('\n')}\n\n` +
+      `Subtotal (excl. VAT): ${formatCurrency(subtotal_amount)}\n` +
+      `VAT: ${formatCurrency(vat_amount)}\n` +
+      `Total (incl. VAT): ${formatCurrency(total_amount)}\n\nWhat next?`,
     buttons: REVIEW_BUTTONS,
   });
 

@@ -13,6 +13,7 @@ export default function Profile() {
   const [fullName, setFullName] = useState(user?.full_name || '');
   const [phone, setPhone] = useState(user?.phone || '');
   const [vatNumber, setVatNumber] = useState(user?.vat_number || '');
+  const [isVatRegistered, setIsVatRegistered] = useState(Boolean(user?.is_vat_registered));
   const [address, setAddress] = useState(user?.address || '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -29,6 +30,7 @@ export default function Profile() {
         full_name: fullName,
         phone,
         vat_number: vatNumber,
+        is_vat_registered: isVatRegistered,
         address,
       });
       setSaved(true);
@@ -72,14 +74,25 @@ export default function Profile() {
           </div>
 
           <div>
-            <label className={LABEL_CLASS}>VAT number</label>
-            <input
-              type="text"
-              value={vatNumber}
-              onChange={(e) => setVatNumber(e.target.value)}
-              className={FIELD_CLASS}
-              placeholder="If your business is VAT-registered"
-            />
+            <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
+              <input
+                type="checkbox"
+                checked={isVatRegistered}
+                onChange={(e) => setIsVatRegistered(e.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+              />
+              My business is VAT-registered
+            </label>
+            {isVatRegistered && (
+              <input
+                type="text"
+                required
+                value={vatNumber}
+                onChange={(e) => setVatNumber(e.target.value)}
+                className={FIELD_CLASS}
+                placeholder="VAT number"
+              />
+            )}
           </div>
 
           <div>

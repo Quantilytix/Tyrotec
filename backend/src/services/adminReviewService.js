@@ -17,12 +17,14 @@ async function insertReview(orderId, reason) {
 // these two reasons flag an order for staff attention without blocking the
 // automated path (stock reservation/PayFast payment proceed normally either
 // way, per "never block other customers' orders").
-async function flagIfNeeded(orderId, customerId, totalAmount) {
+// `netAmount` is the order's value excluding VAT (see the caller): the
+// threshold is about the size of the deal, not the tax on top of it.
+async function flagIfNeeded(orderId, customerId, netAmount) {
   // The high-value insert and the new-customer history count don't depend
   // on each other -- kick both off together instead of paying for them
   // sequentially on the checkout path.
   const [, { count, error }] = await Promise.all([
-    Number(totalAmount) > threshold() ? insertReview(orderId, 'high_value') : Promise.resolve(),
+    Number(netAmount) > threshold() ? insertReview(orderId, 'high_value') : Promise.resolve(),
     supabase
       .from('orders')
       .select('id', { count: 'exact', head: true })

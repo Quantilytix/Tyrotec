@@ -9,6 +9,7 @@ const { friendlyRpcErrorMessage } = require('../utils/rpcErrorMessage');
 const { buildQuotesWorkbook, sendWorkbook } = require('../services/exportService');
 const { applyDateRange, fetchAllRows } = require('../utils/exportQuery');
 const { filterBySearch } = require('../utils/searchFilter');
+const { displayTotals } = require('../utils/vat');
 
 const RESERVATION_MINUTES = Number(process.env.RESERVATION_EXPIRY_MINUTES) || 60;
 
@@ -187,7 +188,7 @@ const checkoutQuoteFast = asyncHandler(async (req, res) => {
 
   const { data: order, error: orderErr } = await supabase
     .from('orders')
-    .select('order_number, total_amount')
+    .select('order_number, total_amount, subtotal_amount, vat_amount')
     .eq('id', result.order_id)
     .single();
   if (orderErr || !order) throw orderErr || new Error('Order not found after checkout');
@@ -199,7 +200,10 @@ const checkoutQuoteFast = asyncHandler(async (req, res) => {
   // this whole fast-checkout feature exists to keep snappy.
   if (result.order_status === 'stock_reserved') {
     await Promise.all([
-      flagIfNeeded(result.order_id, req.user.id, order.total_amount),
+      // The review threshold is a value-of-goods rule, so it compares the
+      // excl-VAT amount -- otherwise adding 15% would start tripping reviews
+      // on orders the client considers below the limit.
+      flagIfNeeded(result.order_id, req.user.id, displayTotals(order).subtotal_amount),
       notifyInternalTeam({
         type: 'general',
         title: 'Fast checkout: stock reserved',

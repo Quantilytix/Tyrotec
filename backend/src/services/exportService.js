@@ -10,6 +10,7 @@
 // which is the entire point of exporting rather than copying the screen.
 
 const ExcelJS = require('exceljs');
+const { displayTotals, lineTotals } = require('../utils/vat');
 
 const CURRENCY_FORMAT = '"R"#,##0.00';
 const DATE_FORMAT = 'yyyy-mm-dd hh:mm';
@@ -84,7 +85,8 @@ function buildProductsWorkbook(products) {
       { header: 'Name', key: 'name', width: 40 },
       { header: 'Category', key: 'category', width: 22 },
       { header: 'Description', key: 'description', width: 50 },
-      { header: 'Unit price (incl. VAT)', key: 'unit_price', width: 20, format: CURRENCY_FORMAT },
+      { header: 'Unit price (excl. VAT)', key: 'unit_price', width: 20, format: CURRENCY_FORMAT },
+      { header: 'VAT applies', key: 'vat_applicable', width: 12 },
       { header: 'Stock on hand', key: 'stock_quantity', width: 15 },
       { header: 'Stock value', key: 'stock_value', width: 18, format: CURRENCY_FORMAT },
       { header: 'Availability', key: 'availability', width: 14 },
@@ -96,6 +98,7 @@ function buildProductsWorkbook(products) {
       category: product.category,
       description: product.description || '',
       unit_price: Number(product.unit_price) || 0,
+      vat_applicable: product.vat_applicable === false ? 'No' : 'Yes',
       stock_quantity: product.stock_quantity,
       stock_value: (Number(product.unit_price) || 0) * (Number(product.stock_quantity) || 0),
       availability: humanise(product.availability),
@@ -120,6 +123,8 @@ function buildQuotesWorkbook(quotes) {
       { header: 'Status', key: 'status', width: 14 },
       { header: 'Source', key: 'source', width: 12 },
       { header: 'Items', key: 'item_count', width: 10 },
+      { header: 'Subtotal (excl. VAT)', key: 'subtotal_amount', width: 20, format: CURRENCY_FORMAT },
+      { header: 'VAT', key: 'vat_amount', width: 14, format: CURRENCY_FORMAT },
       { header: 'Total (incl. VAT)', key: 'total_amount', width: 18, format: CURRENCY_FORMAT },
     ],
     quotes.map((quote) => ({
@@ -130,7 +135,11 @@ function buildQuotesWorkbook(quotes) {
       status: statusLabel(quote.status),
       source: humanise(quote.source),
       item_count: (quote.quote_items || []).length,
-      total_amount: Number(quote.total_amount) || 0,
+      // Legacy documents priced VAT-inclusive have their breakdown worked back
+      // out, so every row of the sheet is comparable.
+      subtotal_amount: displayTotals(quote).subtotal_amount,
+      vat_amount: displayTotals(quote).vat_amount,
+      total_amount: displayTotals(quote).total_amount,
     }))
   );
 
@@ -144,7 +153,10 @@ function buildQuotesWorkbook(quotes) {
       product: item.products?.name || '',
       quantity: item.quantity,
       unit_price: Number(item.unit_price) || 0,
-      line_total: (Number(item.unit_price) || 0) * (Number(item.quantity) || 0),
+      // null rate = a legacy line whose price already included VAT.
+      vat_rate: item.vat_rate === null || item.vat_rate === undefined ? 'n/a' : Number(item.vat_rate),
+      line_total: lineTotals(item).net,
+      line_vat: lineTotals(item).vat,
     }))
   );
 
@@ -158,8 +170,10 @@ function buildQuotesWorkbook(quotes) {
       { header: 'SKU', key: 'sku', width: 18 },
       { header: 'Product', key: 'product', width: 40 },
       { header: 'Quantity', key: 'quantity', width: 12 },
-      { header: 'Unit price', key: 'unit_price', width: 16, format: CURRENCY_FORMAT },
-      { header: 'Line total', key: 'line_total', width: 16, format: CURRENCY_FORMAT },
+      { header: 'Unit price (excl. VAT)', key: 'unit_price', width: 20, format: CURRENCY_FORMAT },
+      { header: 'VAT %', key: 'vat_rate', width: 10 },
+      { header: 'Line total (excl. VAT)', key: 'line_total', width: 20, format: CURRENCY_FORMAT },
+      { header: 'Line VAT', key: 'line_vat', width: 14, format: CURRENCY_FORMAT },
     ],
     itemRows
   );
@@ -193,6 +207,8 @@ function buildOrdersWorkbook(orders) {
       { header: 'Status', key: 'status', width: 20 },
       { header: 'Source', key: 'source', width: 12 },
       { header: 'Items', key: 'item_count', width: 10 },
+      { header: 'Subtotal (excl. VAT)', key: 'subtotal_amount', width: 20, format: CURRENCY_FORMAT },
+      { header: 'VAT', key: 'vat_amount', width: 14, format: CURRENCY_FORMAT },
       { header: 'Total (incl. VAT)', key: 'total_amount', width: 18, format: CURRENCY_FORMAT },
       { header: 'Payment method', key: 'payment_method', width: 18 },
       { header: 'Payment status', key: 'payment_status', width: 16 },
@@ -209,7 +225,9 @@ function buildOrdersWorkbook(orders) {
         status: statusLabel(order.status),
         source: humanise(order.source),
         item_count: (order.order_items || []).length,
-        total_amount: Number(order.total_amount) || 0,
+        subtotal_amount: displayTotals(order).subtotal_amount,
+        vat_amount: displayTotals(order).vat_amount,
+        total_amount: displayTotals(order).total_amount,
         payment_method: payment ? humanise(payment.method) : '',
         payment_status: payment ? humanise(payment.status) : 'Not paid',
         payment_reference: payment ? payment.gateway_reference || payment.reference || '' : '',
@@ -228,7 +246,10 @@ function buildOrdersWorkbook(orders) {
       product: item.products?.name || '',
       quantity: item.quantity,
       unit_price: Number(item.unit_price) || 0,
-      line_total: (Number(item.unit_price) || 0) * (Number(item.quantity) || 0),
+      // null rate = a legacy line whose price already included VAT.
+      vat_rate: item.vat_rate === null || item.vat_rate === undefined ? 'n/a' : Number(item.vat_rate),
+      line_total: lineTotals(item).net,
+      line_vat: lineTotals(item).vat,
     }))
   );
 
@@ -243,8 +264,10 @@ function buildOrdersWorkbook(orders) {
       { header: 'SKU', key: 'sku', width: 18 },
       { header: 'Product', key: 'product', width: 40 },
       { header: 'Quantity', key: 'quantity', width: 12 },
-      { header: 'Unit price', key: 'unit_price', width: 16, format: CURRENCY_FORMAT },
-      { header: 'Line total', key: 'line_total', width: 16, format: CURRENCY_FORMAT },
+      { header: 'Unit price (excl. VAT)', key: 'unit_price', width: 20, format: CURRENCY_FORMAT },
+      { header: 'VAT %', key: 'vat_rate', width: 10 },
+      { header: 'Line total (excl. VAT)', key: 'line_total', width: 20, format: CURRENCY_FORMAT },
+      { header: 'Line VAT', key: 'line_vat', width: 14, format: CURRENCY_FORMAT },
     ],
     itemRows
   );

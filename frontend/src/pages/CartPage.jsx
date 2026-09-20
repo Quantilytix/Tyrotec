@@ -4,13 +4,15 @@ import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { createQuote, checkoutQuoteFast } from '../api/quotes';
 import { formatCurrency } from '../utils/formatters';
+import { lineTotals, vatRateLabel } from '../utils/vat';
 import { downloadQuotePdf } from '../utils/generateQuotePdf';
 import Button from '../components/ui/Button';
 import EmptyState from '../components/ui/EmptyState';
 import Card from '../components/ui/Card';
+import TotalsSummary from '../components/ui/TotalsSummary';
 
 export default function CartPage() {
-  const { items, updateQuantity, removeItem, clearCart, totalAmount } = useCart();
+  const { items, updateQuantity, removeItem, clearCart, totals } = useCart();
   const { user } = useAuth();
   const navigate = useNavigate();
   const [submitting, setSubmitting] = useState(false);
@@ -57,7 +59,7 @@ export default function CartPage() {
   };
 
   const handleDownload = () => {
-    downloadQuotePdf({ items, totalAmount, customer: user });
+    downloadQuotePdf({ items, totals, customer: user });
   };
 
   if (items.length === 0) {
@@ -84,9 +86,10 @@ export default function CartPage() {
           <thead className="border-b border-slate-100 bg-slate-50 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
             <tr>
               <th className="px-4 py-3">Product</th>
-              <th className="px-4 py-3">Unit price</th>
+              <th className="px-4 py-3">Unit price (excl. VAT)</th>
               <th className="px-4 py-3">Quantity</th>
-              <th className="px-4 py-3">Subtotal</th>
+              <th className="px-4 py-3">VAT</th>
+              <th className="px-4 py-3">Line total (excl. VAT)</th>
               <th className="px-4 py-3" />
             </tr>
           </thead>
@@ -109,8 +112,9 @@ export default function CartPage() {
                     className="w-20 rounded-lg border border-slate-200 px-2 py-1 text-sm outline-none transition-colors duration-150 focus:border-teal-500"
                   />
                 </td>
+                <td className="px-4 py-3 text-slate-600">{vatRateLabel(item.vat_rate)}</td>
                 <td className="px-4 py-3 font-mono font-medium text-ink">
-                  {formatCurrency(item.unit_price * item.quantity)}
+                  {formatCurrency(lineTotals(item).net)}
                 </td>
                 <td className="px-4 py-3 text-right">
                   <button
@@ -126,11 +130,8 @@ export default function CartPage() {
         </table>
       </Card>
 
-      <Card className="mt-6 flex items-center justify-between p-4">
-        <div>
-          <p className="text-xs uppercase tracking-wide text-slate-500">Total</p>
-          <p className="font-mono text-2xl font-semibold text-ink">{formatCurrency(totalAmount)}</p>
-        </div>
+      <Card className="mt-6 flex flex-wrap items-center justify-between gap-4 p-4">
+        <TotalsSummary totals={totals} className="text-left" />
         <div className="flex items-center gap-3">
           {error && <p className="text-sm text-bad-500">{error}</p>}
           <Button variant="secondary" onClick={clearCart} disabled={submitting || buyingNow}>

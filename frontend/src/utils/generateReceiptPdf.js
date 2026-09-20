@@ -1,6 +1,7 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { formatCurrency } from './formatters';
+import { displayTotals, lineTotals, vatRateLabel } from './vat';
 import {
   COMPANY,
   INK,
@@ -34,8 +35,8 @@ import {
 // ready for collection, or finished through the manual flow (completed).
 export const RECEIPT_STATUSES = ['confirmed', 'ready_for_collection', 'completed'];
 
-// Prices in the portal are VAT-inclusive (see the quotation's Terms), so the
-// receipt breaks the VAT portion back out of the total rather than adding it.
+// Kept as an export for callers that still reference it; the rate actually
+// charged lives on each document (utils/vat.js).
 export const VAT_RATE = 0.15;
 
 const METHOD_LABELS = {
@@ -62,16 +63,21 @@ export function getReceiptPayment(order) {
 
 const roundCents = (value) => Math.round(value * 100) / 100;
 
-export function receiptTotals(totalAmount, amountPaid) {
-  const total = Number(totalAmount) || 0;
-  const vat = roundCents((total * VAT_RATE) / (1 + VAT_RATE));
+// The order's own stored figures: prices are quoted excluding VAT and the VAT
+// charged is recorded per line, so the receipt states what was actually
+// charged instead of re-deriving it. Orders placed before VAT-exclusive
+// pricing have no stored breakdown, and displayTotals works theirs back out of
+// the inclusive total -- so an old receipt still prints exactly as it did.
+export function receiptTotals(order, amountPaid) {
+  const { subtotal_amount, vat_amount, total_amount, legacy } = displayTotals(order);
   const paid = Number(amountPaid) || 0;
   return {
-    subtotalExclVat: roundCents(total - vat),
-    vat,
-    total,
+    subtotalExclVat: subtotal_amount,
+    vat: vat_amount,
+    total: total_amount,
     paid,
-    balance: Math.max(0, roundCents(total - paid)),
+    balance: Math.max(0, roundCents(total_amount - paid)),
+    legacy,
   };
 }
 
@@ -132,7 +138,7 @@ function drawSummary(doc, totals, x, y) {
 
   drawSummaryRow(doc, 'Subtotal (excl. VAT)', totals.subtotalExclVat, x, width, y);
   y += 6;
-  drawSummaryRow(doc, `VAT (${Math.round(VAT_RATE * 100)}%)`, totals.vat, x, width, y);
+  drawSummaryRow(doc, 'VAT', totals.vat, x, width, y);
   y += 3;
 
   doc.setDrawColor(...BORDER);
@@ -214,7 +220,7 @@ export function buildReceiptDoc({ order, payment, logoDataUri }) {
   // embedded logo from ballooning into a raw pixel stream.
   const doc = new jsPDF({ compress: true });
   const customer = order.users || {};
-  const totals = receiptTotals(order.total_amount, payment.amount);
+  const totals = receiptTotals(order, payment.amount);
 
   drawHeader(doc, logoDataUri, 'RECEIPT');
   drawReceiptMeta(doc, { order, payment, totals });
@@ -232,13 +238,14 @@ export function buildReceiptDoc({ order, payment, logoDataUri }) {
 
   autoTable(doc, {
     startY: Math.max(leftPanelY, rightPanelY) + 6,
-    head: [['Description', 'SKU', 'Qty', 'Unit Price', 'Amount']],
+    head: [['Description', 'SKU', 'Qty', 'Unit Price', 'VAT', 'Amount']],
     body: (order.order_items || []).map((item) => [
       item.products?.name || 'Item',
       item.products?.sku || '',
       String(item.quantity),
       formatCurrency(item.unit_price),
-      formatCurrency(item.unit_price * item.quantity),
+      vatRateLabel(item.vat_rate),
+      formatCurrency(lineTotals(item).net),
     ]),
     margin: { left: MARGIN, right: MARGIN, bottom: FOOTER_CLEARANCE },
     headStyles: { fillColor: NAVY, textColor: 255, fontStyle: 'bold', fontSize: 9 },
@@ -247,9 +254,10 @@ export function buildReceiptDoc({ order, payment, logoDataUri }) {
     columnStyles: {
       0: { halign: 'left' },
       1: { halign: 'left' },
-      2: { halign: 'right', cellWidth: 16 },
+      2: { halign: 'right', cellWidth: 14 },
       3: { halign: 'right' },
-      4: { halign: 'right' },
+      4: { halign: 'right', cellWidth: 16 },
+      5: { halign: 'right' },
     },
     didDrawPage: (data) => {
       if (data.pageNumber > 1) {
@@ -306,7 +314,7 @@ export function buildReceiptDoc({ order, payment, logoDataUri }) {
   doc.setFontSize(8.5);
   doc.setTextColor(...GRAY);
   const notes = [
-    'This receipt confirms payment for the order above. All prices include VAT.',
+    'This receipt confirms payment for the order above. Prices exclude VAT; VAT is shown per line.',
     order.status === 'completed'
       ? 'Please keep it for your records.'
       : 'Please keep it for your records and present it when collecting your order.',

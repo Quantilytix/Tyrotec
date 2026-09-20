@@ -49,6 +49,9 @@ create table public.users (
   status public.account_status not null default 'approved',
   phone varchar(20) unique,
   vat_number varchar(30),
+  -- Declared at signup. Does not change whether VAT is charged (it always is
+  -- on standard-rated goods) -- it records who can claim it back.
+  is_vat_registered boolean not null default false,
   address text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -60,7 +63,10 @@ create table public.products (
   name varchar(255) not null,
   category varchar(100) not null,
   description text,
+  -- EXCLUDING VAT. VAT is added per line at checkout; vat_applicable is false
+  -- only for genuinely zero-rated or exempt goods.
   unit_price numeric not null check (unit_price >= 0),
+  vat_applicable boolean not null default true,
   stock_quantity integer not null default 0 check (stock_quantity >= 0),
   availability varchar(20) not null check (availability in ('local', 'national', 'global')),
   lead_time_days integer not null default 0 check (lead_time_days >= 0),
@@ -80,6 +86,10 @@ create table public.quotes (
   id uuid primary key default gen_random_uuid(),
   quote_number bigint not null unique default nextval('public.quotes_quote_number_seq'),
   customer_id uuid not null references public.users(id) on delete cascade,
+  -- total_amount is the grand total (incl VAT); the other two are its parts.
+  -- Null subtotal/VAT marks a legacy document priced when prices included VAT.
+  subtotal_amount numeric check (subtotal_amount is null or subtotal_amount >= 0),
+  vat_amount numeric check (vat_amount is null or vat_amount >= 0),
   total_amount numeric not null check (total_amount >= 0),
   status public.quote_status not null default 'submitted',
   source public.request_source not null default 'portal',
@@ -93,7 +103,10 @@ create table public.quote_items (
   quote_id uuid not null references public.quotes(id) on delete cascade,
   product_id uuid not null references public.products(id),
   quantity integer not null check (quantity > 0),
-  unit_price numeric not null check (unit_price >= 0)
+  -- Excl VAT, with the rate actually charged on this line (15 or 0), so a past
+  -- document still states what it charged if the rate ever changes.
+  unit_price numeric not null check (unit_price >= 0),
+  vat_rate numeric check (vat_rate is null or (vat_rate >= 0 and vat_rate <= 100))
 );
 
 create sequence public.orders_order_number_seq;
@@ -102,6 +115,8 @@ create table public.orders (
   order_number bigint not null unique default nextval('public.orders_order_number_seq'),
   quote_id uuid not null unique references public.quotes(id),
   customer_id uuid not null references public.users(id) on delete cascade,
+  subtotal_amount numeric check (subtotal_amount is null or subtotal_amount >= 0),
+  vat_amount numeric check (vat_amount is null or vat_amount >= 0),
   total_amount numeric not null check (total_amount >= 0),
   status public.order_status not null default 'pending_approval',
   source public.request_source not null default 'portal',
@@ -116,7 +131,8 @@ create table public.order_items (
   order_id uuid not null references public.orders(id) on delete cascade,
   product_id uuid not null references public.products(id),
   quantity integer not null check (quantity > 0),
-  unit_price numeric not null check (unit_price >= 0)
+  unit_price numeric not null check (unit_price >= 0),
+  vat_rate numeric check (vat_rate is null or (vat_rate >= 0 and vat_rate <= 100))
 );
 
 create table public.notifications (
@@ -305,9 +321,12 @@ create or replace function public.checkout_quote_with_reservation(
 language plpgsql security definer set search_path = public as $$
 declare
   v_quote_status public.quote_status; v_total_amount numeric; v_order_id uuid;
+  v_subtotal_amount numeric; v_vat_amount numeric;
   v_short_product_id uuid; v_short_requested integer; v_short_available integer;
 begin
-  select status, total_amount into v_quote_status, v_total_amount from public.quotes
+  select status, total_amount, subtotal_amount, vat_amount
+    into v_quote_status, v_total_amount, v_subtotal_amount, v_vat_amount
+    from public.quotes
     where id = p_quote_id and customer_id = p_customer_id for update;
   if v_quote_status is null then raise exception 'Quote % not found for this customer', p_quote_id; end if;
   if v_quote_status <> 'submitted' then raise exception 'Quote is not submitted (status: %)', v_quote_status; end if;
@@ -317,10 +336,10 @@ begin
     from public.quote_items qi join public.products p on p.id = qi.product_id
     where qi.quote_id = p_quote_id and p.stock_quantity < qi.quantity limit 1;
   if v_short_product_id is null then
-    insert into public.orders (quote_id, customer_id, total_amount, status, source)
-      values (p_quote_id, p_customer_id, v_total_amount, 'stock_reserved', 'portal') returning id into v_order_id;
-    insert into public.order_items (order_id, product_id, quantity, unit_price)
-      select v_order_id, product_id, quantity, unit_price from public.quote_items where quote_id = p_quote_id;
+    insert into public.orders (quote_id, customer_id, total_amount, subtotal_amount, vat_amount, status, source)
+      values (p_quote_id, p_customer_id, v_total_amount, v_subtotal_amount, v_vat_amount, 'stock_reserved', 'portal') returning id into v_order_id;
+    insert into public.order_items (order_id, product_id, quantity, unit_price, vat_rate)
+      select v_order_id, product_id, quantity, unit_price, vat_rate from public.quote_items where quote_id = p_quote_id;
     update public.products p set stock_quantity = p.stock_quantity - qi.quantity
       from public.quote_items qi where qi.quote_id = p_quote_id and qi.product_id = p.id;
     insert into public.stock_reservations (order_id, product_id, quantity, expires_at)
@@ -329,10 +348,10 @@ begin
     update public.quotes set status = 'converted' where id = p_quote_id;
     return query select v_order_id, 'stock_reserved'::public.order_status, null::uuid, null::integer, null::integer;
   else
-    insert into public.orders (quote_id, customer_id, total_amount, status, source)
-      values (p_quote_id, p_customer_id, v_total_amount, 'pending_approval', 'portal') returning id into v_order_id;
-    insert into public.order_items (order_id, product_id, quantity, unit_price)
-      select v_order_id, product_id, quantity, unit_price from public.quote_items where quote_id = p_quote_id;
+    insert into public.orders (quote_id, customer_id, total_amount, subtotal_amount, vat_amount, status, source)
+      values (p_quote_id, p_customer_id, v_total_amount, v_subtotal_amount, v_vat_amount, 'pending_approval', 'portal') returning id into v_order_id;
+    insert into public.order_items (order_id, product_id, quantity, unit_price, vat_rate)
+      select v_order_id, product_id, quantity, unit_price, vat_rate from public.quote_items where quote_id = p_quote_id;
     update public.quotes set status = 'converted' where id = p_quote_id;
     return query select v_order_id, 'pending_approval'::public.order_status, v_short_product_id, v_short_requested, v_short_available;
   end if;

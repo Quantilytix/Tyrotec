@@ -87,7 +87,20 @@ describe('buildProductsWorkbook', () => {
 
   it('includes stock value so a stocktake total is one click away', async () => {
     const sheet = (await roundTrip(buildProductsWorkbook([PRODUCT]))).getWorksheet('Products');
-    expect(sheet.getRow(2).getCell(7).value).toBe(1250.5 * 4);
+    const headers = headersOf(sheet);
+    const stockValue = sheet.getRow(2).getCell(headers.indexOf('Stock value') + 1);
+    expect(stockValue.value).toBe(1250.5 * 4);
+  });
+
+  it('prices are labelled excluding VAT, and says whether VAT applies', async () => {
+    const sheet = (await roundTrip(buildProductsWorkbook([PRODUCT, { ...PRODUCT, vat_applicable: false }])))
+      .getWorksheet('Products');
+    const headers = headersOf(sheet);
+    const vatColumn = headers.indexOf('VAT applies') + 1;
+
+    expect(headers).toContain('Unit price (excl. VAT)');
+    expect(sheet.getRow(2).getCell(vatColumn).value).toBe('Yes');
+    expect(sheet.getRow(3).getCell(vatColumn).value).toBe('No');
   });
 });
 
@@ -97,9 +110,10 @@ describe('buildQuotesWorkbook', () => {
     expect(workbook.worksheets.map((s) => s.name)).toEqual(['Quotes', 'Quote items']);
   });
 
-  it('summarises each quote with its customer, item count and total', async () => {
-    const sheet = (await roundTrip(buildQuotesWorkbook([QUOTE]))).getWorksheet('Quotes');
-    const [number, date, customer, email, status, source, itemCount, total] = rowValues(sheet, 2);
+  it('summarises each quote with its customer, item count and totals', async () => {
+    const quote = { ...QUOTE, subtotal_amount: 2501, vat_amount: 375.15, total_amount: 2876.15 };
+    const sheet = (await roundTrip(buildQuotesWorkbook([quote]))).getWorksheet('Quotes');
+    const [number, date, customer, email, status, source, itemCount, subtotal, vat, total] = rowValues(sheet, 2);
 
     expect(number).toBe(12);
     expect(new Date(date).toISOString()).toBe('2026-08-14T09:30:00.000Z');
@@ -110,7 +124,40 @@ describe('buildQuotesWorkbook', () => {
     expect(status).toBe('Quote Finalized');
     expect(source).toBe('Whatsapp');
     expect(itemCount).toBe(1);
-    expect(total).toBe(2501);
+    expect(subtotal).toBe(2501);
+    expect(vat).toBe(375.15);
+    expect(total).toBe(2876.15);
+  });
+
+  // Quotes written before VAT-exclusive pricing have no stored breakdown, so
+  // the sheet works it back out of their inclusive total instead of showing
+  // blanks next to the newer rows.
+  it('breaks down a legacy VAT-inclusive quote', async () => {
+    const sheet = (await roundTrip(buildQuotesWorkbook([{ ...QUOTE, total_amount: 115 }]))).getWorksheet('Quotes');
+    const [, , , , , , , subtotal, vat, total] = rowValues(sheet, 2);
+
+    expect(subtotal).toBe(100);
+    expect(vat).toBe(15);
+    expect(total).toBe(115);
+  });
+
+  it('records the VAT rate charged on each line', async () => {
+    const quote = {
+      ...QUOTE,
+      quote_items: [
+        { quantity: 2, unit_price: '100', vat_rate: 15, products: { name: 'Bit', sku: 'A1' } },
+        { quantity: 1, unit_price: '100', vat_rate: 0, products: { name: 'Service', sku: 'S1' } },
+      ],
+    };
+    const sheet = (await roundTrip(buildQuotesWorkbook([quote]))).getWorksheet('Quote items');
+    const headers = headersOf(sheet);
+    const rateColumn = headers.indexOf('VAT %') + 1;
+    const vatColumn = headers.indexOf('Line VAT') + 1;
+
+    expect(sheet.getRow(2).getCell(rateColumn).value).toBe(15);
+    expect(sheet.getRow(2).getCell(vatColumn).value).toBe(30);
+    expect(sheet.getRow(3).getCell(rateColumn).value).toBe(0);
+    expect(sheet.getRow(3).getCell(vatColumn).value).toBe(0);
   });
 
   it('expands every line item with its own line total', async () => {

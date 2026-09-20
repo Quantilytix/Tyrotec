@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { getOrderById, updateOrderStatus } from '../../api/orders';
 import { createPayment } from '../../api/payments';
 import { formatCurrency, formatDate } from '../../utils/formatters';
+import { displayTotals, lineTotals, vatRateLabel } from '../../utils/vat';
 import { downloadReceiptPdf, getReceiptPayment } from '../../utils/generateReceiptPdf';
 import StatusBadge from '../../components/ui/StatusBadge';
 import Spinner from '../../components/ui/Spinner';
@@ -10,6 +11,7 @@ import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import Card from '../../components/ui/Card';
+import TotalsSummary from '../../components/ui/TotalsSummary';
 import PaymentForm from '../../components/PaymentForm';
 
 // Mirrors the merged transitions map in
@@ -130,9 +132,10 @@ export default function AdminOrderDetailPage() {
           <thead className="border-b border-slate-100 bg-slate-50 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
             <tr>
               <th className="px-4 py-3">Product</th>
-              <th className="px-4 py-3">Unit price</th>
+              <th className="px-4 py-3">Unit price (excl. VAT)</th>
               <th className="px-4 py-3">Quantity</th>
-              <th className="px-4 py-3">Subtotal</th>
+              <th className="px-4 py-3">VAT</th>
+              <th className="px-4 py-3">Line total (excl. VAT)</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -144,8 +147,9 @@ export default function AdminOrderDetailPage() {
                 </td>
                 <td className="px-4 py-3 font-mono text-ink">{formatCurrency(item.unit_price)}</td>
                 <td className="px-4 py-3 text-slate-600">{item.quantity}</td>
+                <td className="px-4 py-3 text-slate-600">{vatRateLabel(item.vat_rate)}</td>
                 <td className="px-4 py-3 font-mono font-medium text-ink">
-                  {formatCurrency(item.unit_price * item.quantity)}
+                  {formatCurrency(lineTotals(item).net)}
                 </td>
               </tr>
             ))}
@@ -154,10 +158,7 @@ export default function AdminOrderDetailPage() {
       </Card>
 
       <Card className="mt-6 flex items-center justify-between p-4">
-        <div>
-          <p className="text-xs uppercase tracking-wide text-slate-500">Total</p>
-          <p className="font-mono text-2xl font-semibold text-ink">{formatCurrency(order.total_amount)}</p>
-        </div>
+        <TotalsSummary totals={displayTotals(order)} className="text-left" />
         <div className="flex items-center gap-3">
           {error && <p className="text-sm text-bad-500">{error}</p>}
           {getReceiptPayment(order) && (
