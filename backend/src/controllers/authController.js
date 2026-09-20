@@ -2,20 +2,21 @@ const supabase = require('../config/supabase');
 const asyncHandler = require('../utils/asyncHandler');
 const { notifyUser, notifyInternalTeam, sendEmail } = require('../services/notificationService');
 const { normalizePhone, findUserByPhone } = require('../services/whatsappConversationService');
-const { logActivity } = require('../services/activityLogService');
+const { logActivity, logForUser } = require('../services/activityLogService');
 const { PROFILE_FIELDS } = require('../utils/userProfileFields');
 
-// Public self-registration. Defaults to a 'customer' account (immediate
-// access, unchanged from before). Requesting 'sales_rep' instead lands the
-// account as 'pending' -- it can't log in until an admin approves it via
-// reviewStaffSignupAdmin. 'admin' can never be requested here; an admin can
-// promote an approved sales_rep later if needed.
+// Public self-registration: customers only, with immediate access. Staff
+// accounts are never created here -- they come from an invitation an admin
+// sends (services/staffService.js), which is also what makes the role
+// trustworthy: nobody can ask to be staff.
 const register = asyncHandler(async (req, res) => {
   const { email, password, company_name, full_name, role, phone, vat_number, is_vat_registered } = req.body;
   const requestedRole = role || 'customer';
 
-  if (!['customer', 'sales_rep'].includes(requestedRole)) {
-    return res.status(400).json({ error: "Role must be 'customer' or 'sales_rep'." });
+  // Staff accounts are invite-only (services/staffService.js): the public
+  // signup endpoint can only ever create a customer.
+  if (requestedRole !== 'customer') {
+    return res.status(400).json({ error: 'Staff accounts are created by invitation only.' });
   }
 
   // VAT registration doesn't change what they're charged -- Tyrotec charges
@@ -26,10 +27,6 @@ const register = asyncHandler(async (req, res) => {
   if (vatRegistered && !String(vat_number || '').trim()) {
     return res.status(400).json({ error: 'A VAT number is required for a VAT-registered business.' });
   }
-  if (requestedRole === 'sales_rep' && !full_name) {
-    return res.status(400).json({ error: 'Full name is required for a staff signup.' });
-  }
-
   // Optional, but if given it must not already belong to someone -- most
   // often a WhatsApp-created account (self-serve signup in the chat) whose
   // owner is now registering for real: they should log in / recover that
@@ -45,13 +42,11 @@ const register = asyncHandler(async (req, res) => {
     }
   }
 
-  const status = requestedRole === 'sales_rep' ? 'pending' : 'approved';
-
   const { data, error } = await supabase.auth.admin.createUser({
     email,
     password,
     email_confirm: true,
-    user_metadata: { company_name: company_name || null, full_name: full_name || null, role: requestedRole },
+    user_metadata: { company_name: company_name || null, full_name: full_name || null, role: 'customer' },
   });
 
   if (error) return res.status(400).json({ error: error.message });
@@ -70,8 +65,8 @@ const register = asyncHandler(async (req, res) => {
         email,
         company_name: company_name || null,
         full_name: full_name || null,
-        role: requestedRole,
-        status,
+        role: 'customer',
+        status: 'approved',
         phone: normalizedPhone,
         vat_number: vat_number || null,
         is_vat_registered: vatRegistered,
@@ -82,21 +77,6 @@ const register = asyncHandler(async (req, res) => {
     .single();
 
   if (profileError) return res.status(500).json({ error: profileError.message });
-
-  if (status === 'pending') {
-    await notifyInternalTeam({
-      type: 'general',
-      title: 'New staff signup request',
-      message: `${full_name} (${email}) has requested a sales_rep account and is awaiting approval.`,
-      relatedType: 'staff_signup',
-      relatedId: profile.id,
-    });
-
-    return res.status(201).json({
-      message: 'Your signup request has been submitted for admin approval.',
-      pending: true,
-    });
-  }
 
   return res.status(201).json({ message: 'User created successfully', user: profile });
 });
@@ -110,6 +90,26 @@ const login = asyncHandler(async (req, res) => {
   const { data, error } = await supabase.createScopedClient().auth.signInWithPassword({ email, password });
 
   if (error || !data.session) {
+    // Recorded so repeated attempts on a real account are visible in the audit
+    // log. The role is looked up so the entry lands in the right view (a
+    // failed staff sign-in is staff activity); unknown emails log as 'system'
+    // rather than inventing an actor.
+    const { data: attempted } = await supabase
+      .from('users')
+      .select('id, role')
+      .eq('email', String(email || '').toLowerCase())
+      .maybeSingle();
+
+    await logActivity({
+      actorId: attempted?.id || null,
+      actorRole: attempted?.role || 'system',
+      actorLabel: email,
+      action: 'auth.login_failed',
+      entityType: 'user',
+      entityId: attempted?.id || null,
+      description: `Failed sign-in attempt for ${email}.`,
+    });
+
     return res.status(401).json({ error: 'Invalid email or password' });
   }
 
@@ -129,6 +129,16 @@ const login = asyncHandler(async (req, res) => {
   if (profile.status === 'rejected') {
     return res.status(403).json({ error: 'Your signup request was not approved.' });
   }
+  if (profile.status === 'suspended') {
+    return res.status(403).json({ error: 'This account has been suspended. Contact an administrator.' });
+  }
+
+  await logForUser(profile, {
+    action: 'auth.login',
+    entityType: 'user',
+    entityId: profile.id,
+    description: `${profile.company_name || profile.full_name || profile.email} signed in.`,
+  });
 
   return res.json({
     access_token: data.session.access_token,
@@ -350,6 +360,7 @@ const reviewStaffSignupAdmin = asyncHandler(async (req, res) => {
 
   await logActivity({
     actorId: req.user.id,
+    actorRole: req.user.role,
     actorLabel: req.user.company_name || req.user.email,
     action: 'staff_signup.reviewed',
     entityType: 'user',

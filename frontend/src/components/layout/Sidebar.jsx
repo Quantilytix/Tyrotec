@@ -1,6 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
+import { isAdmin, isStaff } from '../../utils/roles';
 
 const CUSTOMER_NAV_ITEMS = [
   { to: '/products', label: 'Products', icon: BoxIcon },
@@ -30,9 +31,10 @@ const ADMIN_ONLY_NAV_ITEMS = [
 export default function Sidebar() {
   const { totalItems } = useCart();
   const { user } = useAuth();
-  const isStaff = user?.role === 'admin' || user?.role === 'sales_rep';
-  const navItems = isStaff
-    ? user.role === 'admin'
+  // Staff and admin navigation is rank-based: a super admin sees everything
+  // an admin does, without this having to list the role separately.
+  const navItems = isStaff(user?.role)
+    ? isAdmin(user.role)
       ? [...STAFF_NAV_ITEMS, ...ADMIN_ONLY_NAV_ITEMS]
       : STAFF_NAV_ITEMS
     : CUSTOMER_NAV_ITEMS;

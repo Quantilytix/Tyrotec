@@ -1,5 +1,6 @@
 const supabase = require('../config/supabase');
 const { PROFILE_FIELDS } = require('../utils/userProfileFields');
+const { satisfiesRole } = require('../utils/roles');
 
 // Verifies the Supabase Auth access token sent as "Authorization: Bearer <token>"
 // and attaches the caller's profile (id, email, role, company_name) to req.user.
@@ -28,9 +29,11 @@ const authenticateToken = async (req, res, next) => {
       return res.status(403).json({ error: 'User profile not found' });
     }
 
-    // Catches a status change taking effect mid-session (e.g. a rejection
+    // Catches a status change taking effect mid-session (e.g. a suspension
     // after the account already holds a valid token), not just at the next
-    // login -- login() only checks status at sign-in time.
+    // login -- login() only checks status at sign-in time. A suspended staff
+    // member loses access on their very next request, not whenever their
+    // token happens to expire.
     if (profile.status !== 'approved') {
       return res.status(403).json({ error: 'Your account is not active.' });
     }
@@ -42,9 +45,11 @@ const authenticateToken = async (req, res, next) => {
   }
 };
 
+// Roles are ranked (utils/roles.js): requireRole(['admin']) also admits a
+// super admin, without every route having to list both.
 const requireRole = (allowedRoles = []) => {
   return (req, res, next) => {
-    if (!req.user || !allowedRoles.includes(req.user.role)) {
+    if (!req.user || !satisfiesRole(req.user.role, allowedRoles)) {
       return res.status(403).json({ error: 'Forbidden: insufficient permissions' });
     }
     next();

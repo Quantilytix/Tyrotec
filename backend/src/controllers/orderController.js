@@ -1,5 +1,6 @@
 const supabase = require('../config/supabase');
 const asyncHandler = require('../utils/asyncHandler');
+const { isStaff } = require('../utils/roles');
 const { notifyUser } = require('../services/notificationService');
 const { notifyIfLowStockCrossing } = require('./productController');
 const { transitionOrderStatus, ORDER_TRANSITIONS } = require('../services/orderStateService');
@@ -7,7 +8,7 @@ const { buildCheckoutFields } = require('../services/payfastService');
 const { buildOrdersWorkbook, sendWorkbook } = require('../services/exportService');
 const { applyDateRange, fetchAllRows } = require('../utils/exportQuery');
 const { filterBySearch } = require('../utils/searchFilter');
-const { logActivity } = require('../services/activityLogService');
+const { logActivity, logForUser } = require('../services/activityLogService');
 const { friendlyRpcErrorMessage } = require('../utils/rpcErrorMessage');
 
 // Adds a server-computed seconds_remaining to each stock_reservations row,
@@ -104,7 +105,15 @@ const exportOrdersAdmin = asyncHandler(async (req, res) => {
 
   // Search spans the joined customer record, so it's applied here rather than
   // as a database filter -- see utils/searchFilter.js.
-  return sendWorkbook(res, buildOrdersWorkbook(filterBySearch(orders, search, 'order_number')), 'orders');
+  const rows = filterBySearch(orders, search, 'order_number');
+
+  await logForUser(req.user, {
+    action: 'data.exported',
+    entityType: 'orders',
+    description: `Exported ${rows.length} order(s) to Excel${status && status !== 'all' ? ` (status: ${status})` : ''}${from || to ? ` (${from || 'start'} to ${to || 'today'})` : ''}.`,
+  });
+
+  return sendWorkbook(res, buildOrdersWorkbook(rows), 'orders');
 });
 
 const getOrderById = asyncHandler(async (req, res) => {
@@ -113,7 +122,7 @@ const getOrderById = asyncHandler(async (req, res) => {
     .select('*, order_items(*, products(name, sku)), users(email, company_name, full_name, phone, vat_number, address), payments(*), stock_reservations(expires_at)')
     .eq('id', req.params.id);
 
-  if (!['admin', 'sales_rep'].includes(req.user.role)) {
+  if (!isStaff(req.user.role)) {
     query = query.eq('customer_id', req.user.id);
   }
 
@@ -200,6 +209,7 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
     }),
     logActivity({
       actorId: req.user.id,
+      actorRole: req.user.role,
       actorLabel: req.user.company_name || req.user.email,
       action: 'order.status_changed',
       entityType: 'order',
@@ -243,7 +253,7 @@ const getOrderStatus = asyncHandler(async (req, res) => {
     .select('id, order_number, status, total_amount, updated_at, stock_reservations(expires_at), payments(status, gateway, gateway_status)')
     .eq('id', req.params.orderId);
 
-  if (!['admin', 'sales_rep'].includes(req.user.role)) {
+  if (!isStaff(req.user.role)) {
     query = query.eq('customer_id', req.user.id);
   }
 

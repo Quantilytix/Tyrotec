@@ -1,6 +1,7 @@
 const nodemailer = require('nodemailer');
 const supabase = require('../config/supabase');
 const { sendText } = require('../config/whatsapp');
+const { STAFF_ROLES } = require('../utils/roles');
 
 const BREVO_SEND_URL = 'https://api.brevo.com/v3/smtp/email';
 
@@ -37,7 +38,10 @@ function parseSender(from) {
 // Brevo's transactional email API over HTTPS. Used whenever BREVO_API_KEY is
 // set, because hosts like Render's Free plan block outbound SMTP ports (25,
 // 465, 587) but not HTTPS.
-async function sendViaBrevo(to, subject, text) {
+// attachments: [{ filename, content: Buffer }] -- Brevo takes each file as
+// base64 alongside the message, so a quote PDF rides along with the email
+// rather than needing somewhere public to host it.
+async function sendViaBrevo(to, subject, text, attachments = []) {
   const res = await fetch(BREVO_SEND_URL, {
     method: 'POST',
     headers: {
@@ -45,7 +49,18 @@ async function sendViaBrevo(to, subject, text) {
       'content-type': 'application/json',
       accept: 'application/json',
     },
-    body: JSON.stringify({ sender: parseSender(senderAddress()), to: [{ email: to }], subject, textContent: text }),
+    body: JSON.stringify({
+      sender: parseSender(senderAddress()),
+      to: [{ email: to }],
+      subject,
+      textContent: text,
+      ...(attachments.length > 0 && {
+        attachment: attachments.map((file) => ({
+          name: file.filename,
+          content: Buffer.from(file.content).toString('base64'),
+        })),
+      }),
+    }),
   });
   if (!res.ok) {
     const detail = await res.text().catch(() => '');
@@ -53,19 +68,50 @@ async function sendViaBrevo(to, subject, text) {
   }
 }
 
-async function sendEmail(to, subject, text) {
+// Swallows its own errors: notifications are fire-and-forget side channels,
+// and a bounced email must never fail the action that triggered it. Callers
+// that need to *know* whether it went out (sending a quote to a customer on
+// request) use sendEmailOrThrow below instead.
+async function sendEmail(to, subject, text, { attachments = [] } = {}) {
   if (!to) return;
   try {
-    if (process.env.BREVO_API_KEY) {
-      await sendViaBrevo(to, subject, text);
-      return;
-    }
-    const t = getTransporter();
-    if (!t) return;
-    await t.sendMail({ from: senderAddress(), to, subject, text });
+    await sendEmailOrThrow(to, subject, text, { attachments });
   } catch (err) {
     console.error('Failed to send email to', to, '-', err.message);
   }
+}
+
+// Same send, but surfaces failures. Used where a person clicked "send" and is
+// waiting to hear whether it worked.
+async function sendEmailOrThrow(to, subject, text, { attachments = [] } = {}) {
+  if (!to) throw new Error('No email address to send to.');
+  if (!isEmailConfigured()) {
+    throw new Error('Email is not set up on the server yet, so this could not be sent.');
+  }
+  if (!senderAddress()) {
+    throw new Error('No sender address is configured (EMAIL_FROM), so this could not be sent.');
+  }
+
+  if (process.env.BREVO_API_KEY) {
+    await sendViaBrevo(to, subject, text, attachments);
+    return;
+  }
+
+  await getTransporter().sendMail({
+    from: senderAddress(),
+    to,
+    subject,
+    text,
+    ...(attachments.length > 0 && {
+      attachments: attachments.map((file) => ({ filename: file.filename, content: file.content })),
+    }),
+  });
+}
+
+// Whether any email provider is configured at all -- checked before promising
+// a user their email was sent.
+function isEmailConfigured() {
+  return Boolean(process.env.BREVO_API_KEY || process.env.SMTP_HOST);
 }
 
 // Creates an in-app notification for one user and, if given, emails and/or
@@ -97,7 +143,8 @@ async function notifyUser({ userId, type, title, message, relatedType, relatedId
   if (phone) sendText(phone, message);
 }
 
-// Notifies every admin/sales_rep, both in-app and by email. Same
+// Notifies every staff member (including super admins), both in-app and by
+// email. Same
 // fire-and-forget reasoning as notifyUser above -- the in-app notification
 // insert is awaited (it's what other admins/sales_reps actually see), the
 // emails are not.
@@ -105,7 +152,7 @@ async function notifyInternalTeam({ type, title, message, relatedType, relatedId
   const { data: staff, error } = await supabase
     .from('users')
     .select('id, email')
-    .in('role', ['admin', 'sales_rep']);
+    .in('role', STAFF_ROLES);
 
   if (error) {
     console.error('Failed to load internal team for notification:', error.message);
@@ -128,4 +175,4 @@ async function notifyInternalTeam({ type, title, message, relatedType, relatedId
   staff.forEach((s) => sendEmail(s.email, title, message));
 }
 
-module.exports = { notifyUser, notifyInternalTeam, sendEmail };
+module.exports = { notifyUser, notifyInternalTeam, sendEmail, sendEmailOrThrow, isEmailConfigured };

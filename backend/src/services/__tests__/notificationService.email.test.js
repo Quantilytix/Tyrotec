@@ -8,6 +8,8 @@ const EMAIL_ENV = ['BREVO_API_KEY', 'EMAIL_FROM', 'SMTP_FROM', 'SMTP_USER', 'SMT
 
 describe('sendEmail', () => {
   let sendEmail;
+  let sendEmailOrThrow;
+  let isEmailConfigured;
   const savedEnv = {};
 
   beforeEach(() => {
@@ -18,7 +20,7 @@ describe('sendEmail', () => {
       savedEnv[key] = process.env[key];
       delete process.env[key];
     }
-    ({ sendEmail } = require('../notificationService'));
+    ({ sendEmail, sendEmailOrThrow, isEmailConfigured } = require('../notificationService'));
   });
 
   afterEach(() => {
@@ -80,6 +82,58 @@ describe('sendEmail', () => {
 
     expect(global.fetch).not.toHaveBeenCalled();
     expect(mockSendMail).toHaveBeenCalledWith({ from: 'Tyrotec <sales@tyrotec.co.za>', to: 'buyer@example.com', subject: 'Hi', text: 'Body' });
+  });
+
+  // Sending a quote to a customer attaches the PDF; Brevo takes files as
+  // base64 alongside the message.
+  it('attaches files as base64 when sending through Brevo', async () => {
+    process.env.BREVO_API_KEY = 'xkeysib-test';
+    process.env.EMAIL_FROM = 'sales@tyrotec.co.za';
+    global.fetch.mockResolvedValue({ ok: true });
+
+    await sendEmailOrThrow('buyer@example.com', 'Your quotation', 'Attached.', {
+      attachments: [{ filename: 'quote-12.pdf', content: Buffer.from('%PDF-fake') }],
+    });
+
+    const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+    expect(body.attachment).toEqual([
+      { name: 'quote-12.pdf', content: Buffer.from('%PDF-fake').toString('base64') },
+    ]);
+  });
+
+  it('passes attachments straight through to SMTP', async () => {
+    process.env.SMTP_HOST = 'smtp.gmail.com';
+    process.env.EMAIL_FROM = 'sales@tyrotec.co.za';
+    mockSendMail.mockResolvedValue({});
+    const content = Buffer.from('%PDF-fake');
+
+    await sendEmailOrThrow('buyer@example.com', 'Your quotation', 'Attached.', {
+      attachments: [{ filename: 'quote-12.pdf', content }],
+    });
+
+    expect(mockSendMail).toHaveBeenCalledWith(
+      expect.objectContaining({ attachments: [{ filename: 'quote-12.pdf', content }] })
+    );
+  });
+
+  // A person clicked "send" and is waiting: they must be told it didn't go,
+  // rather than seeing a success message for an email nobody will receive.
+  it('sendEmailOrThrow reports when no provider is configured', async () => {
+    await expect(sendEmailOrThrow('buyer@example.com', 'Hi', 'Body')).rejects.toThrow(/not set up/i);
+    expect(isEmailConfigured()).toBe(false);
+  });
+
+  it('sendEmailOrThrow reports a missing sender address', async () => {
+    process.env.BREVO_API_KEY = 'xkeysib-test';
+    await expect(sendEmailOrThrow('buyer@example.com', 'Hi', 'Body')).rejects.toThrow(/EMAIL_FROM/);
+  });
+
+  it('sendEmailOrThrow surfaces a provider rejection', async () => {
+    process.env.BREVO_API_KEY = 'xkeysib-bad';
+    process.env.EMAIL_FROM = 'sales@tyrotec.co.za';
+    global.fetch.mockResolvedValue({ ok: false, status: 401, text: async () => 'unauthorized' });
+
+    await expect(sendEmailOrThrow('buyer@example.com', 'Hi', 'Body')).rejects.toThrow(/401/);
   });
 
   it('does nothing when no email provider is configured or there is no recipient', async () => {

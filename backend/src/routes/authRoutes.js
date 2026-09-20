@@ -13,6 +13,7 @@ const {
   getPendingStaffAdmin,
   reviewStaffSignupAdmin,
 } = require('../controllers/authController');
+const { acceptInvite } = require('../controllers/staffController');
 const { authenticateToken, requireRole } = require('../middleware/auth');
 const validate = require('../middleware/validate');
 
@@ -23,7 +24,9 @@ const emailPasswordRules = [
 
 const registerRules = [
   ...emailPasswordRules,
-  body('role').optional().isIn(['customer', 'sales_rep']).withMessage("Role must be 'customer' or 'sales_rep'"),
+  // Staff accounts are invite-only now (services/staffService.js), so the
+  // public signup endpoint only ever creates customers.
+  body('role').optional().isIn(['customer']).withMessage('Staff accounts are created by invitation only'),
   // { values: 'falsy' } matters here, not just style: Register.jsx always
   // sends full_name/phone/vat_number as an explicit `null` (not an omitted
   // key) when left blank -- express-validator's default .optional() only
@@ -84,6 +87,18 @@ const updateMeRules = [
   body('is_vat_registered').optional().isBoolean(),
   body('address').optional({ values: 'falsy' }).isString(),
 ];
+
+// Public: an invited staff member sets their password using the token from
+// their invitation link. Rate-limited like the other credential endpoints.
+router.post(
+  '/staff/accept-invite',
+  authLimiter,
+  body('token').isString().notEmpty(),
+  body('password').isLength({ min: 8 }).withMessage('Password must be at least 8 characters'),
+  body('full_name').optional({ values: 'falsy' }).isString(),
+  validate,
+  acceptInvite
+);
 
 router.get('/me', authenticateToken, getMe);
 router.patch('/me', authenticateToken, updateMeRules, validate, updateMe);

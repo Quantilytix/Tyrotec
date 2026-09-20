@@ -29,3 +29,7 @@ export const updateQuoteStatus = (quoteId, status) =>
 // and created-at date range (YYYY-MM-DD), matching the admin screen's filters.
 export const exportQuotesAdmin = ({ source, from, to } = {}) =>
   apiClient.get('/quotes/admin/export', { params: { source, from, to }, responseType: 'blob' });
+
+// Emails the customer their quotation with the PDF attached, from the same
+// address the portal's notifications come from. Staff only.
+export const sendQuoteEmailAdmin = (quoteId) => apiClient.post(`/quotes/${quoteId}/send-email`);

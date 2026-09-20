@@ -7,6 +7,8 @@ const { assertCategoryAllowed } = require('../services/categoryService');
 const { buildProductsWorkbook, sendWorkbook } = require('../services/exportService');
 const { fetchAllRows } = require('../utils/exportQuery');
 const { LOW_STOCK_THRESHOLD } = require('../config/constants');
+const { logForUser } = require('../services/activityLogService');
+const { formatCurrency } = require('../utils/formatCurrency');
 
 const PRODUCT_IMAGES_BUCKET = 'Product Images';
 
@@ -51,6 +53,37 @@ const WRITABLE_FIELDS = [
   'supplier_phone',
   'supplier_cost',
 ];
+
+// Describes what actually changed, field by field, so the audit log shows
+// "Unit price R1 250,50 -> R1 400,00" rather than a bare "product updated".
+// Money fields are formatted; everything else is printed as-is.
+const MONEY_FIELDS = ['unit_price', 'supplier_cost'];
+const FIELD_LABELS = {
+  sku: 'SKU',
+  name: 'Name',
+  category: 'Category',
+  unit_price: 'Unit price',
+  vat_applicable: 'VAT applies',
+  stock_quantity: 'Stock',
+  availability: 'Availability',
+  lead_time_days: 'Lead time',
+  min_order_qty: 'Min order qty',
+  supplier_name: 'Supplier',
+  supplier_cost: 'Supplier cost',
+};
+
+function describeChanges(before, after) {
+  const show = (field, value) => {
+    if (value === null || value === undefined || value === '') return 'empty';
+    if (MONEY_FIELDS.includes(field)) return formatCurrency(value);
+    if (typeof value === 'boolean') return value ? 'yes' : 'no';
+    return String(value);
+  };
+
+  return Object.keys(FIELD_LABELS)
+    .filter((field) => after[field] !== undefined && String(before?.[field] ?? '') !== String(after[field] ?? ''))
+    .map((field) => `${FIELD_LABELS[field]} ${show(field, before?.[field])} -> ${show(field, after[field])}`);
+}
 
 function pickWritableFields(body) {
   const result = {};
@@ -140,6 +173,12 @@ const exportProducts = asyncHandler(async (req, res) => {
     return query;
   });
 
+  await logForUser(req.user, {
+    action: 'data.exported',
+    entityType: 'products',
+    description: `Exported ${products.length} product(s) to Excel${category ? ` (category: ${category})` : ''}${search ? ` (search: "${search}")` : ''}.`,
+  });
+
   return sendWorkbook(res, buildProductsWorkbook(products), 'products');
 });
 
@@ -167,6 +206,14 @@ const createProduct = asyncHandler(async (req, res) => {
     .single();
 
   if (error) return res.status(400).json({ error: error.message });
+
+  await logForUser(req.user, {
+    action: 'product.created',
+    entityType: 'product',
+    entityId: data.id,
+    description: `Added product ${data.name} (${data.sku}) at ${formatCurrency(data.unit_price)} excl. VAT, stock ${data.stock_quantity}.`,
+  });
+
   return res.status(201).json(data);
 });
 
@@ -176,17 +223,16 @@ const updateProduct = asyncHandler(async (req, res) => {
   // Only need the "before" values when stock or category are actually part of
   // this edit -- an extra read on every unrelated product edit (name, price,
   // etc.) would be wasted.
-  let previousStock = null;
-  let previousCategory = null;
-  if (fields.stock_quantity !== undefined || fields.category !== undefined) {
-    const { data: existing } = await supabase
-      .from('products')
-      .select('stock_quantity, category')
-      .eq('id', req.params.id)
-      .single();
-    previousStock = fields.stock_quantity !== undefined ? existing?.stock_quantity ?? null : null;
-    previousCategory = existing?.category ?? null;
-  }
+  // Read the row first: the audit entry records what each field changed from,
+  // and the low-stock alert needs the previous stock level.
+  const { data: existing } = await supabase
+    .from('products')
+    .select('*')
+    .eq('id', req.params.id)
+    .single();
+
+  const previousStock = fields.stock_quantity !== undefined ? existing?.stock_quantity ?? null : null;
+  const previousCategory = existing?.category ?? null;
 
   // Products created before the managed category list exists keep categories
   // that aren't on it: re-saving such a product unchanged is fine, changing
@@ -210,10 +256,22 @@ const updateProduct = asyncHandler(async (req, res) => {
     await notifyIfLowStockCrossing(previousStock, data);
   }
 
+  const changes = describeChanges(existing, fields);
+  if (changes.length > 0) {
+    await logForUser(req.user, {
+      action: 'product.updated',
+      entityType: 'product',
+      entityId: data.id,
+      description: `Updated ${data.name} (${data.sku}): ${changes.join('; ')}.`,
+    });
+  }
+
   return res.json(data);
 });
 
 const deleteProduct = asyncHandler(async (req, res) => {
+  const { data: existing } = await supabase.from('products').select('sku, name').eq('id', req.params.id).maybeSingle();
+
   const { error, count } = await supabase
     .from('products')
     .delete({ count: 'exact' })
@@ -231,6 +289,14 @@ const deleteProduct = asyncHandler(async (req, res) => {
   }
 
   if (!count) return res.status(404).json({ error: 'Product not found' });
+
+  await logForUser(req.user, {
+    action: 'product.deleted',
+    entityType: 'product',
+    entityId: req.params.id,
+    description: `Deleted product ${existing?.name || 'unknown'} (${existing?.sku || req.params.id}).`,
+  });
+
   return res.status(204).send();
 });
 

@@ -6,6 +6,7 @@ import DashboardLayout from './components/layout/DashboardLayout';
 
 import Login from './pages/Login';
 import Register from './pages/Register';
+import AcceptStaffInvite from './pages/AcceptStaffInvite';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import AuthCallback from './pages/AuthCallback';
@@ -32,13 +33,13 @@ import AdminStaffPage from './pages/admin/AdminStaffPage';
 import AdminActivityLogPage from './pages/admin/AdminActivityLogPage';
 import AdminReviewsPage from './pages/admin/AdminReviewsPage';
 
-const STAFF_ROLES = ['admin', 'sales_rep'];
+import { STAFF_ROLES, isStaff } from './utils/roles';
 
 // Staff land on the product catalog they manage; customers land on the one
 // they shop from.
 function HomeRedirect() {
   const { user } = useAuth();
-  const target = STAFF_ROLES.includes(user?.role) ? '/admin/products' : '/products';
+  const target = isStaff(user?.role) ? '/admin/products' : '/products';
   return <Navigate to={target} replace />;
 }
 
@@ -50,6 +51,8 @@ export default function App() {
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            {/* Staff accounts are invite-only: this is where an invitation link lands. */}
+            <Route path="/staff/accept-invite" element={<AcceptStaffInvite />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/auth/callback" element={<AuthCallback />} />

@@ -1,11 +1,16 @@
 const asyncHandler = require('../utils/asyncHandler');
-const { listActivity } = require('../services/activityLogService');
+const { listActivity, listActions } = require('../services/activityLogService');
 
-// Admin only -- see activityLogRoutes.js.
+// Admin and super admin only -- see activityLogRoutes.js. `audience` selects
+// the customer-activity or staff-activity view.
 const getActivityLog = asyncHandler(async (req, res) => {
-  const { page, limit } = req.query;
-  const result = await listActivity({ page, limit });
+  const { page, limit, audience, action, search, from, to } = req.query;
+  const result = await listActivity({ page, limit, audience, action, search, from, to });
   return res.json(result);
 });
 
-module.exports = { getActivityLog };
+const getActivityActions = asyncHandler(async (req, res) => {
+  return res.json(await listActions());
+});
+
+module.exports = { getActivityLog, getActivityActions };

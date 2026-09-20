@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const path = require('path');
 const supabase = require('../config/supabase');
 const asyncHandler = require('../utils/asyncHandler');
+const { isStaff } = require('../utils/roles');
 const { submitPaymentForCustomer, reviewPayment } = require('../services/paymentService');
 const { logActivity } = require('../services/activityLogService');
 
@@ -17,12 +18,12 @@ const PAYMENT_PROOFS_BUCKET = 'payment-proofs';
 // instead of assuming req.user is the customer.
 const createPayment = asyncHandler(async (req, res) => {
   const { order_id, method, reference, amount, note, proof_url } = req.body;
-  const isStaff = ['admin', 'sales_rep'].includes(req.user.role);
+  const submittedByStaff = isStaff(req.user.role);
 
   let customerId = req.user.id;
   let customerLabel = req.user.company_name || req.user.email;
 
-  if (isStaff) {
+  if (submittedByStaff) {
     const { data: order, error: orderErr } = await supabase
       .from('orders')
       .select('customer_id, users(email, company_name)')
@@ -38,7 +39,7 @@ const createPayment = asyncHandler(async (req, res) => {
     customerId,
     customerLabel,
     { orderId: order_id, method, reference, amount, note, proofUrl: proof_url },
-    isStaff ? 'admin' : 'portal'
+    submittedByStaff ? 'admin' : 'portal'
   );
   if (result.error) return res.status(result.status).json({ error: result.error });
 
@@ -68,6 +69,7 @@ const updatePaymentStatus = asyncHandler(async (req, res) => {
 
   await logActivity({
     actorId: req.user.id,
+    actorRole: req.user.role,
     actorLabel: req.user.company_name || req.user.email,
     action: 'payment.reviewed',
     entityType: 'payment',

@@ -20,6 +20,7 @@ const resolve = asyncHandler(async (req, res) => {
 
   await logActivity({
     actorId: req.user.id,
+    actorRole: req.user.role,
     actorLabel: req.user.company_name || req.user.email,
     action: 'review.resolved',
     entityType: 'admin_review',

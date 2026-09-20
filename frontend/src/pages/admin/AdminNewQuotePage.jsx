@@ -2,12 +2,15 @@ import { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { getAllCustomersAdmin, createCustomerAdmin } from '../../api/customers';
 import { getProducts } from '../../api/products';
-import { createQuoteForCustomerAdmin } from '../../api/quotes';
+import { createQuoteForCustomerAdmin, sendQuoteEmailAdmin } from '../../api/quotes';
+import { downloadQuotePdf } from '../../utils/generateQuotePdf';
 import { formatCurrency } from '../../utils/formatters';
 import { documentTotals, lineTotals, rateForProduct, vatRateLabel } from '../../utils/vat';
 import Button from '../../components/ui/Button';
 import Card from '../../components/ui/Card';
 import TotalsSummary from '../../components/ui/TotalsSummary';
+import Modal from '../../components/ui/Modal';
+import QuoteCreatedModal from '../../components/admin/QuoteCreatedModal';
 
 const SEARCH_INPUT_CLASS =
   'w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none transition-colors duration-150 focus:border-teal-500';
@@ -34,6 +37,7 @@ export default function AdminNewQuotePage() {
 
   const [items, setItems] = useState([]);
   const [submitting, setSubmitting] = useState(false);
+  const [created, setCreated] = useState(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -122,18 +126,50 @@ export default function AdminNewQuotePage() {
   // records when it is created.
   const totals = documentTotals(items);
 
+  const handleEmailCreated = async () => {
+    const { data } = await sendQuoteEmailAdmin(created.quoteId);
+    return data;
+  };
+
+  // The same PDF the customer gets, drawn from what's on screen -- the quote
+  // has just been created from exactly these lines.
+  const handleDownloadCreated = () =>
+    downloadQuotePdf({
+      items,
+      totals,
+      customer: selectedCustomer,
+      quoteNumber: created.quoteNumber,
+      status: 'submitted',
+      createdAt: new Date().toISOString(),
+    });
+
   const handleSubmit = async () => {
     setError('');
     setSubmitting(true);
     try {
       const payload = items.map((i) => ({ product_id: i.product_id, quantity: i.quantity }));
       const { data } = await createQuoteForCustomerAdmin(selectedCustomer.id, payload);
-      navigate(`/admin/quotes/${data.quoteId}`);
+      setCreated({ ...data, total_amount: totals.total_amount });
     } catch (err) {
       setError(err.response?.data?.error || 'Could not create this quote. Try again.');
       setSubmitting(false);
     }
   };
+
+  if (created) {
+    return (
+      <Modal title="Quote created" onClose={() => navigate('/admin/quotes')}>
+        <QuoteCreatedModal
+          quote={created}
+          customer={selectedCustomer}
+          onEmail={handleEmailCreated}
+          onDownload={handleDownloadCreated}
+          onView={() => navigate(`/admin/quotes/${created.quoteId}`)}
+          onClose={() => navigate('/admin/quotes')}
+        />
+      </Modal>
+    );
+  }
 
   return (
     <div>

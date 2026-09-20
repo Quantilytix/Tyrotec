@@ -14,6 +14,7 @@ const createCategory = asyncHandler(async (req, res) => {
 
   await logActivity({
     actorId: req.user.id,
+    actorRole: req.user.role,
     actorLabel: req.user.company_name || req.user.email,
     action: 'product_category.created',
     entityType: 'product_category',
@@ -36,6 +37,7 @@ const deleteCategory = asyncHandler(async (req, res) => {
 
   await logActivity({
     actorId: req.user.id,
+    actorRole: req.user.role,
     actorLabel: req.user.company_name || req.user.email,
     action: 'product_category.deleted',
     entityType: 'product_category',

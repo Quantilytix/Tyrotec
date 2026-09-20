@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { getQuoteById, updateQuoteStatus } from '../../api/quotes';
+import { sendQuoteEmailAdmin, getQuoteById, updateQuoteStatus } from '../../api/quotes';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { displayTotals, lineTotals, vatRateLabel } from '../../utils/vat';
 import { downloadQuotePdf } from '../../utils/generateQuotePdf';
@@ -18,6 +18,9 @@ export default function AdminQuoteDetailPage() {
   const [updating, setUpdating] = useState(false);
   const [error, setError] = useState('');
   const [showVoidConfirm, setShowVoidConfirm] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [emailedTo, setEmailedTo] = useState('');
+  const [emailError, setEmailError] = useState('');
 
   const load = () => getQuoteById(quoteId).then(({ data }) => setQuote(data));
 
@@ -50,6 +53,21 @@ export default function AdminQuoteDetailPage() {
   // gets to them: download the PDF and send it however staff already do
   // (email, WhatsApp, printed for a walk-in), same document the customer's
   // own portal generates for themselves.
+  // Emails the customer this quotation with the PDF attached. Reports the
+  // outcome next to the button: the point of pressing it is knowing it went.
+  const handleEmail = async () => {
+    setEmailError('');
+    setSending(true);
+    try {
+      const { data } = await sendQuoteEmailAdmin(quoteId);
+      setEmailedTo(data.to);
+    } catch (err) {
+      setEmailError(err.response?.data?.error || 'Could not email this quote.');
+    } finally {
+      setSending(false);
+    }
+  };
+
   const handleDownload = () => {
     downloadQuotePdf({
       items: quote.quote_items.map((item) => ({
@@ -126,8 +144,13 @@ export default function AdminQuoteDetailPage() {
         <TotalsSummary totals={displayTotals(quote)} className="text-left" />
         <div className="flex items-center gap-3">
           {error && <p className="text-sm text-bad-500">{error}</p>}
+          {emailedTo && <span className="text-sm text-good-500">Emailed to {emailedTo}</span>}
+          {emailError && <span className="text-sm text-bad-500">{emailError}</span>}
           <Button variant="secondary" onClick={handleDownload}>
             Download quote
+          </Button>
+          <Button variant="secondary" onClick={handleEmail} loading={sending} disabled={!quote.users?.email}>
+            {emailedTo ? 'Send again' : 'Email to customer'}
           </Button>
           {canExpire && (
             <Button variant="danger" onClick={() => setShowVoidConfirm(true)} loading={updating}>

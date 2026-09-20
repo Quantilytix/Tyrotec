@@ -1,10 +1,12 @@
 const supabase = require('../config/supabase');
 const asyncHandler = require('../utils/asyncHandler');
+const { isStaff } = require('../utils/roles');
 const { createQuoteForCustomer, convertQuoteForCustomer } = require('../services/quoteService');
 const { flagIfNeeded, flagStockShort } = require('../services/adminReviewService');
-const { notifyInternalTeam } = require('../services/notificationService');
+const { notifyInternalTeam, notifyUser, sendEmailOrThrow } = require('../services/notificationService');
+const { generateQuotePdfBuffer } = require('../services/quotePdfService');
 const { formatCurrency } = require('../utils/formatCurrency');
-const { logActivity } = require('../services/activityLogService');
+const { logActivity, logForUser } = require('../services/activityLogService');
 const { friendlyRpcErrorMessage } = require('../utils/rpcErrorMessage');
 const { buildQuotesWorkbook, sendWorkbook } = require('../services/exportService');
 const { applyDateRange, fetchAllRows } = require('../utils/exportQuery');
@@ -74,7 +76,15 @@ const exportQuotesAdmin = asyncHandler(async (req, res) => {
 
   // Search spans the joined customer record, so it's applied here rather than
   // as a database filter -- see utils/searchFilter.js.
-  return sendWorkbook(res, buildQuotesWorkbook(filterBySearch(quotes, search, 'quote_number')), 'quotes');
+  const rows = filterBySearch(quotes, search, 'quote_number');
+
+  await logForUser(req.user, {
+    action: 'data.exported',
+    entityType: 'quotes',
+    description: `Exported ${rows.length} quote(s) to Excel${status && status !== 'all' ? ` (status: ${status})` : ''}${from || to ? ` (${from || 'start'} to ${to || 'today'})` : ''}.`,
+  });
+
+  return sendWorkbook(res, buildQuotesWorkbook(rows), 'quotes');
 });
 
 const getAllQuotesAdmin = asyncHandler(async (req, res) => {
@@ -116,13 +126,82 @@ const updateQuoteStatus = asyncHandler(async (req, res) => {
   return res.json({ message: 'Quote marked as expired', quoteId: id, status: 'expired' });
 });
 
+// Admin/sales_rep only. Emails the customer their quotation with the PDF
+// attached, using the same address the portal's notifications come from.
+// Errors are surfaced rather than swallowed: a person clicked "send" and is
+// waiting to be told whether it actually went.
+const sendQuoteEmail = asyncHandler(async (req, res) => {
+  const { quoteId } = req.params;
+
+  const { data: quote, error } = await supabase
+    .from('quotes')
+    .select('*, users(email, company_name, full_name, phone, vat_number, address), quote_items(*, products(name, sku))')
+    .eq('id', quoteId)
+    .single();
+
+  if (error || !quote) return res.status(404).json({ error: 'Quote not found' });
+
+  const customer = quote.users || {};
+  if (!customer.email) {
+    return res.status(400).json({ error: 'This customer has no email address on file.' });
+  }
+
+  const pdf = generateQuotePdfBuffer({
+    quote,
+    items: quote.quote_items,
+    customer,
+    channel: 'the Tyrotec Customer Portal',
+  });
+
+  const totals = displayTotals(quote);
+  const customerLabel = customer.company_name || customer.full_name || customer.email;
+  const body = [
+    `Hi ${customerLabel},`,
+    '',
+    `Please find attached quotation #${quote.quote_number} for ${formatCurrency(totals.total_amount)} (incl. VAT).`,
+    '',
+    'You can view it, and place the order when you are ready, by signing in to the Tyrotec Customer Portal.',
+    '',
+    'Kind regards,',
+    'Tyrotec',
+  ].join('\n');
+
+  try {
+    await sendEmailOrThrow(customer.email, `Your quotation #${quote.quote_number} from Tyrotec`, body, {
+      attachments: [{ filename: `quote-${quote.quote_number}.pdf`, content: pdf }],
+    });
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
+  }
+
+  // In-app too, so the customer sees it next time they sign in even if the
+  // email goes astray. Email is omitted here: it has just been sent.
+  await notifyUser({
+    userId: quote.customer_id,
+    type: 'general',
+    title: `Quotation #${quote.quote_number} sent`,
+    message: `We've emailed you quotation #${quote.quote_number} for ${formatCurrency(totals.total_amount)}.`,
+    relatedType: 'quote',
+    relatedId: quote.id,
+  });
+
+  await logForUser(req.user, {
+    action: 'quote.emailed',
+    entityType: 'quote',
+    entityId: quote.id,
+    description: `${req.user.company_name || req.user.email} emailed quotation #${quote.quote_number} to ${customer.email}.`,
+  });
+
+  return res.json({ sent: true, to: customer.email, quoteNumber: quote.quote_number });
+});
+
 const getQuoteById = asyncHandler(async (req, res) => {
   let query = supabase
     .from('quotes')
     .select('*, users(email, company_name), quote_items(*, products(name, sku))')
     .eq('id', req.params.quoteId);
 
-  if (!['admin', 'sales_rep'].includes(req.user.role)) {
+  if (!isStaff(req.user.role)) {
     query = query.eq('customer_id', req.user.id);
   }
 
@@ -150,6 +229,7 @@ const convertQuoteToOrder = asyncHandler(async (req, res) => {
 
   await logActivity({
     actorId: req.user.id,
+    actorRole: req.user.role,
     actorLabel: customerLabel,
     action: 'quote.converted',
     entityType: 'order',
@@ -213,6 +293,7 @@ const checkoutQuoteFast = asyncHandler(async (req, res) => {
       }),
       logActivity({
         actorId: req.user.id,
+        actorRole: req.user.role,
         actorLabel: customerLabel,
         action: 'quote.converted',
         entityType: 'order',
@@ -232,6 +313,7 @@ const checkoutQuoteFast = asyncHandler(async (req, res) => {
       }),
       logActivity({
         actorId: req.user.id,
+        actorRole: req.user.role,
         actorLabel: customerLabel,
         action: 'quote.converted',
         entityType: 'order',
@@ -257,6 +339,7 @@ module.exports = {
   getCustomerQuotes,
   getAllQuotesAdmin,
   exportQuotesAdmin,
+  sendQuoteEmail,
   getQuoteById,
   updateQuoteStatus,
   convertQuoteToOrder,

@@ -7,6 +7,7 @@ const {
   getCustomerQuotes,
   getAllQuotesAdmin,
   exportQuotesAdmin,
+  sendQuoteEmail,
   getQuoteById,
   updateQuoteStatus,
   convertQuoteToOrder,
@@ -38,6 +39,8 @@ router.post(
 router.get('/my-quotes', authenticateToken, getCustomerQuotes);
 router.get('/admin/all', authenticateToken, requireRole(['admin', 'sales_rep']), getAllQuotesAdmin);
 router.get('/admin/export', authenticateToken, requireRole(['admin', 'sales_rep']), exportQuotesAdmin);
+// Emails the customer their quotation with the PDF attached.
+router.post('/:quoteId/send-email', authenticateToken, requireRole(['admin', 'sales_rep']), sendQuoteEmail);
 router.get('/:quoteId', authenticateToken, getQuoteById);
 router.patch(
   '/:quoteId/status',
