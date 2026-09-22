@@ -137,7 +137,7 @@ export default function AdminActivityLogPage() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search by person or description"
-          className={`${CONTROL} min-w-[18rem] flex-1`}
+          className={`${CONTROL} w-full flex-1 sm:w-auto sm:min-w-[18rem]`}
         />
         <select value={action} onChange={(e) => setAction(e.target.value)} className={CONTROL}>
           <option value="">All actions</option>
@@ -191,8 +191,8 @@ export default function AdminActivityLogPage() {
           <p className="mt-4 text-xs text-slate-500">
             Showing {entries.length} of {total}
           </p>
-          <Card className="mt-2 overflow-hidden">
-            <table className="w-full text-sm">
+          <Card className="mt-2 overflow-x-auto">
+            <table className="w-full min-w-[640px] text-sm">
               <thead className="border-b border-slate-100 bg-slate-50 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="px-4 py-3">When</th>

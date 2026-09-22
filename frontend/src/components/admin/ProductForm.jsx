@@ -112,7 +112,7 @@ export default function ProductForm({ initialProduct, onSubmit, onCancel, catego
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
           <label className={LABEL_CLASS}>SKU</label>
           <input required value={form.sku} onChange={update('sku')} className={FIELD_CLASS} />
@@ -141,7 +141,7 @@ export default function ProductForm({ initialProduct, onSubmit, onCancel, catego
         <textarea value={form.description} onChange={update('description')} rows={2} className={FIELD_CLASS} />
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
           <label className={LABEL_CLASS}>Unit price (excl. VAT)</label>
           <input
@@ -178,7 +178,7 @@ export default function ProductForm({ initialProduct, onSubmit, onCancel, catego
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div>
           <label className={LABEL_CLASS}>Availability</label>
           <select value={form.availability} onChange={update('availability')} className={FIELD_CLASS}>
@@ -213,7 +213,7 @@ export default function ProductForm({ initialProduct, onSubmit, onCancel, catego
 
       <div>
         <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Supplier details</p>
-        <div className="mt-2 grid grid-cols-2 gap-4">
+        <div className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className={LABEL_CLASS}>Supplier name</label>
             <input required value={form.supplier_name} onChange={update('supplier_name')} className={FIELD_CLASS} />

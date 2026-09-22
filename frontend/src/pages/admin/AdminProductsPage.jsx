@@ -109,7 +109,7 @@ export default function AdminProductsPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="font-display text-xl font-semibold text-ink">Products</h1>
           <p className="mt-1 text-sm text-slate-500">Manage the catalog customers order from.</p>
@@ -162,8 +162,8 @@ export default function AdminProductsPage() {
         </div>
       ) : (
         <>
-          <Card className="mt-6 overflow-hidden">
-            <table className="w-full text-sm">
+          <Card className="mt-6 overflow-x-auto">
+            <table className="w-full min-w-[640px] text-sm">
               <thead className="border-b border-slate-100 bg-slate-50 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="px-4 py-3">Product</th>

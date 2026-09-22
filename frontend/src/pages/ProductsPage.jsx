@@ -59,7 +59,7 @@ export default function ProductsPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="font-display text-xl font-semibold text-ink">Products</h1>
           <p className="mt-1 text-sm text-slate-500">Browse the catalog and add items to your quote.</p>

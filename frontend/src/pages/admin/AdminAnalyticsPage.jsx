@@ -105,7 +105,7 @@ function SplitBar({ label, a, b, aLabel, bLabel }) {
 
   return (
     <div>
-      <div className="flex items-center justify-between text-sm text-slate-600">
+      <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-slate-600">
         <p>{label}</p>
         <p className="font-mono text-xs text-slate-500">{a + b} total</p>
       </div>
@@ -230,7 +230,7 @@ export default function AdminAnalyticsPage() {
         </div>
       </Card>
 
-      <div className="mt-6 grid grid-cols-2 gap-6">
+      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card className="p-5">
           <h2 className="font-display text-base font-semibold text-ink">Quote funnel</h2>
           <p className="mt-1 text-xs text-slate-500">Submitted quotes by current status.</p>
@@ -320,7 +320,7 @@ export default function AdminAnalyticsPage() {
         <Card className="p-5">
           <h2 className="font-display text-base font-semibold text-ink">Payment health</h2>
           <p className="mt-1 text-xs text-slate-500">Bank-transfer/EFT submissions by review status.</p>
-          <div className="mt-4 grid grid-cols-3 gap-3">
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
             <StatTile label="Collected" value={formatCurrency(payments.collected.amount)} accent="good" />
             <StatTile label="Pending review" value={payments.pendingReview.count} accent="gold" />
             <StatTile label="Rejected" value={payments.rejected.count} accent="maroon" />
@@ -334,24 +334,26 @@ export default function AdminAnalyticsPage() {
         {customers.topBySpend.length === 0 ? (
           <p className="mt-4 text-sm text-slate-500">No customers yet.</p>
         ) : (
-          <table className="mt-4 w-full text-sm">
-            <thead className="text-left text-xs font-medium uppercase tracking-wide text-slate-500">
-              <tr>
-                <th className="pb-2">Customer</th>
-                <th className="pb-2 text-right">Orders</th>
-                <th className="pb-2 text-right">Spent</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {customers.topBySpend.map((c) => (
-                <tr key={c.id}>
-                  <td className="py-2 text-ink">{c.company_name || c.email}</td>
-                  <td className="py-2 text-right text-slate-600">{c.order_count}</td>
-                  <td className="py-2 text-right font-mono text-ink">{formatCurrency(c.total_spent)}</td>
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full min-w-[480px] text-sm">
+              <thead className="text-left text-xs font-medium uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="pb-2">Customer</th>
+                  <th className="pb-2 text-right">Orders</th>
+                  <th className="pb-2 text-right">Spent</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {customers.topBySpend.map((c) => (
+                  <tr key={c.id}>
+                    <td className="py-2 text-ink">{c.company_name || c.email}</td>
+                    <td className="py-2 text-right text-slate-600">{c.order_count}</td>
+                    <td className="py-2 text-right font-mono text-ink">{formatCurrency(c.total_spent)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </Card>
       </div>

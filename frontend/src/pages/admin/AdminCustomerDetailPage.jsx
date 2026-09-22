@@ -69,7 +69,7 @@ export default function AdminCustomerDetailPage() {
         </p>
       </div>
 
-      <div className="mt-6 grid grid-cols-3 gap-4">
+      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Card className="p-4">
           <p className="text-xs uppercase tracking-wide text-slate-500">Total spent</p>
           <p className="mt-1 font-mono text-2xl font-semibold text-ink">{formatCurrency(customer.total_spent)}</p>
@@ -128,8 +128,8 @@ export default function AdminCustomerDetailPage() {
           <EmptyState title="No orders yet" description="This customer hasn't placed an order." />
         </div>
       ) : (
-        <Card className="mt-3 overflow-hidden">
-          <table className="w-full text-sm">
+        <Card className="mt-3 overflow-x-auto">
+          <table className="w-full min-w-[640px] text-sm">
             <thead className="border-b border-slate-100 bg-slate-50 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="px-4 py-3">Order</th>
@@ -166,8 +166,8 @@ export default function AdminCustomerDetailPage() {
           <EmptyState title="No quotes yet" description="This customer hasn't submitted a quote." />
         </div>
       ) : (
-        <Card className="mt-3 overflow-hidden">
-          <table className="w-full text-sm">
+        <Card className="mt-3 overflow-x-auto">
+          <table className="w-full min-w-[640px] text-sm">
             <thead className="border-b border-slate-100 bg-slate-50 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="px-4 py-3">Quote</th>

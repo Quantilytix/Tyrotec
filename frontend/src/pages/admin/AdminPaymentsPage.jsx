@@ -49,8 +49,8 @@ export default function AdminPaymentsPage() {
           <EmptyState title="No payments yet" description="Submitted customer payments will show up here." />
         </div>
       ) : (
-        <Card className="mt-6 overflow-hidden">
-          <table className="w-full text-sm">
+        <Card className="mt-6 overflow-x-auto">
+          <table className="w-full min-w-[640px] text-sm">
             <thead className="border-b border-slate-100 bg-slate-50 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="px-4 py-3">Order</th>

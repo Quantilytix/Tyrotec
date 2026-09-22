@@ -30,7 +30,7 @@ export default function ListFilters({
         value={search}
         onChange={(e) => onSearchChange(e.target.value)}
         placeholder={`Search by number, customer or email`}
-        className={`${CONTROL} min-w-[16rem] flex-1`}
+        className={`${CONTROL} w-full flex-1 sm:w-auto sm:min-w-[16rem]`}
       />
 
       <select value={source} onChange={(e) => onSourceChange(e.target.value)} className={CONTROL}>

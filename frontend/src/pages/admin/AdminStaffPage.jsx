@@ -93,7 +93,7 @@ export default function AdminStaffPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="font-display text-xl font-semibold text-ink">Staff</h1>
           <p className="mt-1 text-sm text-slate-500">
@@ -113,7 +113,7 @@ export default function AdminStaffPage() {
             <p className="text-sm font-medium text-ink">Pending requests</p>
             <p className="text-xs text-slate-500">Older self-signup requests awaiting a decision.</p>
           </div>
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[640px] text-sm">
             <tbody className="divide-y divide-slate-100">
               {pending.map((request) => (
                 <tr key={request.id}>
@@ -146,8 +146,8 @@ export default function AdminStaffPage() {
         </Card>
       )}
 
-      <Card className="mt-6 overflow-hidden">
-        <table className="w-full text-sm">
+      <Card className="mt-6 overflow-x-auto">
+        <table className="w-full min-w-[640px] text-sm">
           <thead className="border-b border-slate-100 bg-slate-50 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
             <tr>
               <th className="px-4 py-3">Name</th>
@@ -228,8 +228,8 @@ export default function AdminStaffPage() {
           <EmptyState title="No invitations yet" description="Invite someone to give them staff access." />
         </div>
       ) : (
-        <Card className="mt-3 overflow-hidden">
-          <table className="w-full text-sm">
+        <Card className="mt-3 overflow-x-auto">
+          <table className="w-full min-w-[640px] text-sm">
             <thead className="border-b border-slate-100 bg-slate-50 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="px-4 py-3">Email</th>

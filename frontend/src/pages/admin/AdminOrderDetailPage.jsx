@@ -114,7 +114,7 @@ export default function AdminOrderDetailPage() {
         ← Back to orders
       </Link>
 
-      <div className="mt-3 flex items-center justify-between">
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="font-display text-xl font-semibold text-ink">
             Order <span className="font-mono text-base text-slate-400">#{order.order_number}</span>
@@ -137,8 +137,8 @@ export default function AdminOrderDetailPage() {
         </div>
       </div>
 
-      <Card className="mt-6 overflow-hidden">
-        <table className="w-full text-sm">
+      <Card className="mt-6 overflow-x-auto">
+        <table className="w-full min-w-[640px] text-sm">
           <thead className="border-b border-slate-100 bg-slate-50 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
             <tr>
               <th className="px-4 py-3">Product</th>
@@ -167,7 +167,7 @@ export default function AdminOrderDetailPage() {
         </table>
       </Card>
 
-      <Card className="mt-6 flex items-center justify-between p-4">
+      <Card className="mt-6 flex flex-col gap-4 p-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <TotalsSummary totals={displayTotals(order)} className="text-left" />
         <div className="flex items-center gap-3">
           {error && <p className="text-sm text-bad-500">{error}</p>}

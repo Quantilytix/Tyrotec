@@ -1,12 +1,14 @@
 export default function Modal({ title, onClose, children, wide = false }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 px-4 animate-modal-backdrop">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4 animate-modal-backdrop">
       <div className="absolute inset-0" onClick={onClose} />
       <div
-        className={`relative w-full rounded-2xl bg-white p-6 shadow-card animate-modal-panel ${wide ? 'max-w-4xl' : 'max-w-lg'}`}
+        className={`relative flex max-h-[90vh] w-full flex-col rounded-2xl bg-white p-5 shadow-card animate-modal-panel sm:p-6 ${
+          wide ? 'max-w-4xl' : 'max-w-lg'
+        }`}
       >
-        <div className="flex items-center justify-between">
-          <h2 className="font-display text-lg font-semibold text-ink">{title}</h2>
+        <div className="flex shrink-0 items-center justify-between">
+          <h2 className="pr-2 font-display text-base font-semibold text-ink sm:text-lg">{title}</h2>
           <button
             onClick={onClose}
             className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-ink"
@@ -17,7 +19,7 @@ export default function Modal({ title, onClose, children, wide = false }) {
             </svg>
           </button>
         </div>
-        <div className="mt-4 max-h-[70vh] overflow-y-auto pr-1">{children}</div>
+        <div className="mt-4 min-h-0 flex-1 overflow-y-auto pr-1">{children}</div>
       </div>
     </div>
   );

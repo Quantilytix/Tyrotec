@@ -343,54 +343,56 @@ export default function AdminNewQuotePage() {
         </div>
 
         {items.length > 0 && (
-          <table className="mt-4 w-full text-sm">
-            <thead className="border-b border-slate-100 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
-              <tr>
-                <th className="py-2">Product</th>
-                <th className="py-2">Unit price (excl. VAT)</th>
-                <th className="py-2">Quantity</th>
-                <th className="py-2">VAT</th>
-                <th className="py-2">Line total (excl. VAT)</th>
-                <th className="py-2" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {items.map((item) => (
-                <tr key={item.product_id}>
-                  <td className="py-2">
-                    <p className="font-medium text-ink">{item.name}</p>
-                    <p className="font-mono text-xs text-slate-400">{item.sku}</p>
-                  </td>
-                  <td className="py-2 font-mono text-ink">{formatCurrency(item.unit_price)}</td>
-                  <td className="py-2">
-                    <input
-                      type="number"
-                      min={1}
-                      value={item.quantity}
-                      onChange={(e) => updateQuantity(item.product_id, Math.max(Number(e.target.value), 1))}
-                      className="w-20 rounded-lg border border-slate-200 px-2 py-1 text-sm outline-none transition-colors duration-150 focus:border-teal-500"
-                    />
-                  </td>
-                  <td className="py-2 text-slate-600">{vatRateLabel(item.vat_rate)}</td>
-                  <td className="py-2 font-mono font-medium text-ink">
-                    {formatCurrency(lineTotals(item).net)}
-                  </td>
-                  <td className="py-2 text-right">
-                    <button
-                      onClick={() => removeItem(item.product_id)}
-                      className="text-xs font-medium text-bad-500 transition-colors duration-150 hover:underline"
-                    >
-                      Remove
-                    </button>
-                  </td>
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full min-w-[640px] text-sm">
+              <thead className="border-b border-slate-100 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="py-2">Product</th>
+                  <th className="py-2">Unit price (excl. VAT)</th>
+                  <th className="py-2">Quantity</th>
+                  <th className="py-2">VAT</th>
+                  <th className="py-2">Line total (excl. VAT)</th>
+                  <th className="py-2" />
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {items.map((item) => (
+                  <tr key={item.product_id}>
+                    <td className="py-2">
+                      <p className="font-medium text-ink">{item.name}</p>
+                      <p className="font-mono text-xs text-slate-400">{item.sku}</p>
+                    </td>
+                    <td className="py-2 font-mono text-ink">{formatCurrency(item.unit_price)}</td>
+                    <td className="py-2">
+                      <input
+                        type="number"
+                        min={1}
+                        value={item.quantity}
+                        onChange={(e) => updateQuantity(item.product_id, Math.max(Number(e.target.value), 1))}
+                        className="w-20 rounded-lg border border-slate-200 px-2 py-1 text-sm outline-none transition-colors duration-150 focus:border-teal-500"
+                      />
+                    </td>
+                    <td className="py-2 text-slate-600">{vatRateLabel(item.vat_rate)}</td>
+                    <td className="py-2 font-mono font-medium text-ink">
+                      {formatCurrency(lineTotals(item).net)}
+                    </td>
+                    <td className="py-2 text-right">
+                      <button
+                        onClick={() => removeItem(item.product_id)}
+                        className="text-xs font-medium text-bad-500 transition-colors duration-150 hover:underline"
+                      >
+                        Remove
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </Card>
 
-      <Card className="mt-6 flex items-center justify-between p-4">
+      <Card className="mt-6 flex flex-col gap-4 p-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <TotalsSummary totals={totals} className="text-left" />
         <div className="flex items-center gap-3">
           {error && <p className="text-sm text-bad-500">{error}</p>}
