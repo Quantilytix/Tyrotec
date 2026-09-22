@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
-import { createQuote, checkoutQuoteFast } from '../api/quotes';
+import { createQuote } from '../api/quotes';
 import { formatCurrency } from '../utils/formatters';
 import { lineTotals, vatRateLabel } from '../utils/vat';
 import { downloadQuotePdf } from '../utils/generateQuotePdf';
@@ -16,7 +16,6 @@ export default function CartPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [submitting, setSubmitting] = useState(false);
-  const [buyingNow, setBuyingNow] = useState(false);
   const [error, setError] = useState('');
 
   const handleSubmit = async () => {
@@ -42,21 +41,6 @@ export default function CartPage() {
   // out to be short, checkoutQuoteFast still creates the order (falling back
   // to pending_approval) rather than failing, so this always lands on a real
   // order page one way or another.
-  const handleBuyNow = async () => {
-    setError('');
-    setBuyingNow(true);
-    try {
-      const payload = items.map((i) => ({ product_id: i.product_id, quantity: i.quantity }));
-      const { data: quoteData } = await createQuote(payload);
-      const { data: orderData } = await checkoutQuoteFast(quoteData.quoteId);
-      clearCart();
-      navigate(`/orders/${orderData.orderId}`);
-    } catch (err) {
-      setError(err.response?.data?.error || 'Could not complete checkout. Try again.');
-    } finally {
-      setBuyingNow(false);
-    }
-  };
 
   const handleDownload = () => {
     downloadQuotePdf({ items, totals, customer: user });
@@ -79,7 +63,9 @@ export default function CartPage() {
   return (
     <div>
       <h1 className="font-display text-xl font-semibold text-ink">Quote builder</h1>
-      <p className="mt-1 text-sm text-slate-500">Review your items, then buy now or save a formal quote for later.</p>
+      <p className="mt-1 text-sm text-slate-500">
+        Review your items, then request a quote. You confirm the order from the quote.
+      </p>
 
       <Card className="mt-6 overflow-hidden">
         <table className="w-full text-sm">
@@ -134,28 +120,25 @@ export default function CartPage() {
         <TotalsSummary totals={totals} className="text-left" />
         <div className="flex items-center gap-3">
           {error && <p className="text-sm text-bad-500">{error}</p>}
-          <Button variant="secondary" onClick={clearCart} disabled={submitting || buyingNow}>
+          <button
+            type="button"
+            onClick={clearCart}
+            disabled={submitting}
+            className="text-sm text-slate-500 transition-colors duration-150 hover:text-ink disabled:opacity-50"
+          >
             Clear
+          </button>
+          <button
+            type="button"
+            onClick={handleDownload}
+            disabled={submitting}
+            className="text-sm text-teal-600 transition-colors duration-150 hover:underline disabled:opacity-50"
+          >
+            Download PDF
+          </button>
+          <Button onClick={handleSubmit} loading={submitting}>
+            Request quote
           </Button>
-          <Button variant="secondary" onClick={handleDownload} disabled={submitting || buyingNow}>
-            Download quote
-          </Button>
-          <div className="flex flex-col items-center gap-1">
-            <Button variant="secondary" onClick={handleSubmit} loading={submitting} disabled={buyingNow}>
-              Finalize quote
-            </Button>
-            <p className="max-w-[10rem] text-center text-xs text-slate-400">
-              Saves it for later. Convert or check out from the quote page
-            </p>
-          </div>
-          <div className="flex flex-col items-center gap-1">
-            <Button onClick={handleBuyNow} loading={buyingNow} disabled={submitting}>
-              Buy now
-            </Button>
-            <p className="max-w-[10rem] text-center text-xs text-slate-400">
-              Stock reserved immediately, pay by card or EFT right away
-            </p>
-          </div>
         </div>
       </Card>
     </div>

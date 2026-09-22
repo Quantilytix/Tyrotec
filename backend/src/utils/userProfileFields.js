@@ -8,6 +8,6 @@
 // bug that's invisible until a specific field happens to be blank on a
 // specific screen.
 const PROFILE_FIELDS =
-  'id, email, company_name, full_name, role, status, phone, vat_number, is_vat_registered, address';
+  'id, email, company_name, full_name, role, status, phone, vat_number, is_vat_registered, address, can_order_on_account';
 
 module.exports = { PROFILE_FIELDS };

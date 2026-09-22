@@ -39,9 +39,13 @@ export const RECEIPT_STATUSES = ['confirmed', 'ready_for_collection', 'completed
 // charged lives on each document (utils/vat.js).
 export const VAT_RATE = 0.15;
 
+// Keep in step with the methods RecordPaymentForm.jsx offers, plus
+// 'payfast', which only the gateway webhook ever writes.
 const METHOD_LABELS = {
   payfast: 'PayFast (online payment)',
   bank_transfer: 'Bank transfer / EFT',
+  cash: 'Cash',
+  card_machine: 'Card machine',
   other: 'Other',
 };
 

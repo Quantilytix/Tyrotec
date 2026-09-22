@@ -61,12 +61,44 @@ function computeSignature(fields, passphrase, { skipEmpty } = { skipEmpty: true 
   return crypto.createHash('md5').update(pairs.join('&')).digest('hex');
 }
 
+// Which merchant to bill, and with which passphrase, for the mode we're in.
+//
+// The merchant account is the same in both modes -- a PayFast sandbox
+// account is registered against the same merchant ID -- so only the
+// passphrase differs, and that difference is the whole reason this function
+// exists.
+//
+// A signature is only valid if it was salted with the passphrase configured
+// on *that* PayFast account. The sandbox account here has none set, so
+// signing sandbox checkouts with the live passphrase produced "Generated
+// signature does not match submitted signature" and the payment page never
+// loaded. Verified directly against sandbox.payfast.co.za: same merchant,
+// with the passphrase 400s, without it the payment page renders.
+//
+// Set PAYFAST_SANDBOX_PASSPHRASE only if a passphrase is later configured on
+// the sandbox account itself.
+function credentials() {
+  const merchant = {
+    merchant_id: process.env.PAYFAST_MERCHANT_ID,
+    merchant_key: process.env.PAYFAST_MERCHANT_KEY,
+  };
+  if (!isSandbox()) {
+    return { ...merchant, passphrase: process.env.PAYFAST_PASSPHRASE };
+  }
+  return {
+    merchant_id: process.env.PAYFAST_SANDBOX_MERCHANT_ID || merchant.merchant_id,
+    merchant_key: process.env.PAYFAST_SANDBOX_MERCHANT_KEY || merchant.merchant_key,
+    passphrase: process.env.PAYFAST_SANDBOX_PASSPHRASE || undefined,
+  };
+}
+
 // order/customer -> the signed field set + the URL to auto-post the browser
 // to. Field order follows PayFast's own documented example order.
 function buildCheckoutFields(order, customer) {
+  const { merchant_id, merchant_key, passphrase } = credentials();
   const fields = {
-    merchant_id: process.env.PAYFAST_MERCHANT_ID,
-    merchant_key: process.env.PAYFAST_MERCHANT_KEY,
+    merchant_id,
+    merchant_key,
     return_url: process.env.PAYFAST_RETURN_URL,
     cancel_url: process.env.PAYFAST_CANCEL_URL,
     notify_url: `${process.env.BACKEND_URL || ''}/api/payments/payfast/notify`,
@@ -77,7 +109,7 @@ function buildCheckoutFields(order, customer) {
     item_name: `Order #${order.order_number}`,
   };
 
-  const signature = computeSignature(fields, process.env.PAYFAST_PASSPHRASE);
+  const signature = computeSignature(fields, passphrase);
 
   return { action: checkoutUrl(), fields: { ...fields, signature } };
 }
@@ -89,7 +121,8 @@ function verifyItnSignature(rawFields) {
   const { signature, ...rest } = rawFields;
   if (!signature) return false;
 
-  const expected = computeSignature(rest, process.env.PAYFAST_PASSPHRASE, { skipEmpty: false });
+  // Verified with the same passphrase the checkout was signed with.
+  const expected = computeSignature(rest, credentials().passphrase, { skipEmpty: false });
 
   try {
     return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
@@ -116,4 +149,4 @@ async function revalidateWithPayfast(rawBody) {
   }
 }
 
-module.exports = { buildCheckoutFields, verifyItnSignature, revalidateWithPayfast, isSandbox };
+module.exports = { buildCheckoutFields, verifyItnSignature, revalidateWithPayfast, isSandbox, credentials };

@@ -13,13 +13,25 @@ const supabase = require('../config/supabase');
 // ever calls transitionOrderStatus with 'stock_reserved' as a target either;
 // it's only ever set directly by checkout_quote_with_reservation() at order
 // creation time, not transitioned into later.
+// 'approved' -> 'confirmed' is how an offline payment lands: staff record
+// money received against an approved order (paymentService.js's
+// recordStaffPayment) and it joins the same confirmed -> ready_for_collection
+// path a PayFast payment takes, so both kinds of paid order end up in one
+// place and both can produce a receipt.
 const ORDER_TRANSITIONS = {
   pending_approval: ['approved', 'cancelled'],
-  approved: ['processing', 'cancelled'],
+  approved: ['confirmed', 'processing', 'cancelled'],
   processing: ['completed', 'cancelled'],
-  stock_reserved: ['confirmed', 'cancelled'],
+  // 'awaiting_payment' here is the customer choosing to be invoiced
+  // instead of paying online (switch_order_to_invoice), which also drops the
+  // reservation so no timer applies.
+  stock_reserved: ['confirmed', 'awaiting_payment', 'cancelled'],
+  // Pay-on-invoice. Unlike 'stock_reserved' there is no timer behind this
+  // one: nothing moves it but a recorded payment or a staff cancellation.
+  awaiting_payment: ['confirmed', 'cancelled'],
   confirmed: ['ready_for_collection', 'cancelled'],
-  ready_for_collection: [],
+  // Collected by the customer: the end of the journey.
+  ready_for_collection: ['completed'],
   completed: [],
   cancelled: [],
 };

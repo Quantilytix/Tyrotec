@@ -13,8 +13,8 @@ export const convertQuoteToOrder = (quoteId) =>
   apiClient.post(`/quotes/${quoteId}/convert`);
 
 // The fast, automated path -- stock is checked/reserved immediately instead
-// of waiting on admin approval. Payment (PayFast or bank transfer) is always
-// a separate step taken afterwards from the order page, never triggered here.
+// of waiting on admin approval. Payment (PayFast) is always a separate step
+// taken afterwards from the order page, never triggered here.
 // Returns { status: 'stock_reserved' } on success or
 // { status: 'pending_approval', shortProductId, ... } if stock was short.
 export const checkoutQuoteFast = (quoteId) =>

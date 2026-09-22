@@ -58,7 +58,7 @@ const getAllCustomersAdmin = asyncHandler(async (req, res) => {
 const getCustomerDetailAdmin = asyncHandler(async (req, res) => {
   const { data: customer, error: customerErr } = await supabase
     .from('users')
-    .select('id, email, company_name, phone, created_at')
+    .select('id, email, company_name, phone, created_at, can_order_on_account')
     .eq('id', req.params.id)
     .eq('role', 'customer')
     .single();
@@ -149,4 +149,45 @@ const createCustomerAdmin = asyncHandler(async (req, res) => {
   return res.status(201).json(profile);
 });
 
-module.exports = { getAllCustomersAdmin, getCustomerDetailAdmin, createCustomerAdmin };
+// Admin/sales_rep only: allow (or stop) this customer placing orders payable
+// on invoice. This is a credit decision -- the customer takes the goods
+// before paying -- so it's logged to the audit trail like a role change,
+// never a silent toggle.
+const setCustomerAccountTerms = asyncHandler(async (req, res) => {
+  const { can_order_on_account } = req.body;
+  if (typeof can_order_on_account !== 'boolean') {
+    return res.status(400).json({ error: 'can_order_on_account must be true or false.' });
+  }
+
+  const { data: customer, error: findErr } = await supabase
+    .from('users')
+    .select('id, email, company_name, role')
+    .eq('id', req.params.id)
+    .single();
+  if (findErr || !customer) return res.status(404).json({ error: 'Customer not found' });
+  if (customer.role !== 'customer') {
+    return res.status(400).json({ error: 'Only customer accounts can order on account.' });
+  }
+
+  const { error } = await supabase
+    .from('users')
+    .update({ can_order_on_account, updated_at: new Date().toISOString() })
+    .eq('id', req.params.id);
+  if (error) throw error;
+
+  const customerLabel = customer.company_name || customer.email;
+  const actorLabel = req.user.company_name || req.user.email;
+  await logActivity({
+    actorId: req.user.id,
+    actorRole: req.user.role,
+    actorLabel,
+    action: 'customer.account_terms_changed',
+    entityType: 'user',
+    entityId: customer.id,
+    description: `${actorLabel} ${can_order_on_account ? 'enabled' : 'disabled'} ordering on account for ${customerLabel}.`,
+  });
+
+  return res.json({ id: customer.id, can_order_on_account });
+});
+
+module.exports = { getAllCustomersAdmin, getCustomerDetailAdmin, createCustomerAdmin, setCustomerAccountTerms };

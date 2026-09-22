@@ -25,9 +25,16 @@ describe('orderStateService', () => {
   describe('ORDER_TRANSITIONS / allowedNextStatuses', () => {
     it('every terminal status allows no further transitions', () => {
       const { allowedNextStatuses } = require('../orderStateService');
-      for (const terminal of ['ready_for_collection', 'completed', 'cancelled']) {
+      for (const terminal of ['completed', 'cancelled']) {
         expect(allowedNextStatuses(terminal)).toEqual([]);
       }
+    });
+
+    // Marking an order collected is the last step staff take, so
+    // ready_for_collection leads to completed rather than being terminal.
+    it('lets a ready order be marked collected', () => {
+      const { allowedNextStatuses } = require('../orderStateService');
+      expect(allowedNextStatuses('ready_for_collection')).toEqual(['completed']);
     });
 
     it('returns [] for a status the map has no entry for at all', () => {
@@ -38,24 +45,54 @@ describe('orderStateService', () => {
     it('matches the documented manual-approval chain', () => {
       const { allowedNextStatuses } = require('../orderStateService');
       expect(allowedNextStatuses('pending_approval')).toEqual(['approved', 'cancelled']);
-      expect(allowedNextStatuses('approved')).toEqual(['processing', 'cancelled']);
+      expect(allowedNextStatuses('approved')).toEqual(['confirmed', 'processing', 'cancelled']);
       expect(allowedNextStatuses('processing')).toEqual(['completed', 'cancelled']);
+    });
+
+    // A staff-recorded offline payment confirms an 'approved' order, which is
+    // what keeps both kinds of paid order (PayFast and EFT) on the same
+    // confirmed -> ready_for_collection path.
+    it('lets an approved order be confirmed by a recorded payment', () => {
+      const { allowedNextStatuses } = require('../orderStateService');
+      expect(allowedNextStatuses('approved')).toContain('confirmed');
     });
 
     it('matches the documented fast-checkout chain', () => {
       const { allowedNextStatuses } = require('../orderStateService');
-      expect(allowedNextStatuses('stock_reserved')).toEqual(['confirmed', 'cancelled']);
+      expect(allowedNextStatuses('stock_reserved')).toEqual([
+        'confirmed',
+        'awaiting_payment',
+        'cancelled',
+      ]);
       expect(allowedNextStatuses('confirmed')).toEqual(['ready_for_collection', 'cancelled']);
     });
 
-    it('every non-terminal status can reach cancelled', () => {
+    // Pay-on-invoice orders have no reservation and no timer: the only way
+    // out is a recorded payment (confirmed) or staff calling it off.
+    it('matches the documented pay-on-invoice chain', () => {
+      const { allowedNextStatuses } = require('../orderStateService');
+      expect(allowedNextStatuses('awaiting_payment')).toEqual(['confirmed', 'cancelled']);
+    });
+
+    // Anything still in flight can be called off, which restocks it. The one
+    // exception is ready_for_collection: that order is already paid for and
+    // picked, so unwinding it is a refund conversation, not a status change.
+    it('every unfinished status can reach cancelled, except a paid and packed one', () => {
       const { ORDER_TRANSITIONS, allowedNextStatuses } = require('../orderStateService');
-      const nonTerminal = Object.keys(ORDER_TRANSITIONS).filter(
-        (status) => allowedNextStatuses(status).length > 0
+      const inFlight = Object.keys(ORDER_TRANSITIONS).filter(
+        (status) => allowedNextStatuses(status).length > 0 && status !== 'ready_for_collection'
       );
-      for (const status of nonTerminal) {
+      for (const status of inFlight) {
         expect(allowedNextStatuses(status)).toContain('cancelled');
       }
+      expect(allowedNextStatuses('ready_for_collection')).not.toContain('cancelled');
+    });
+
+    // The customer choosing to be invoiced instead of paying online: same
+    // order, reservation dropped so no timer applies.
+    it('lets a reserved order become an invoice', () => {
+      const { allowedNextStatuses } = require('../orderStateService');
+      expect(allowedNextStatuses('stock_reserved')).toContain('awaiting_payment');
     });
   });
 

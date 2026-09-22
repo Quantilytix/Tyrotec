@@ -1,7 +1,7 @@
 const supabase = require('../config/supabase');
 const asyncHandler = require('../utils/asyncHandler');
 const { isStaff } = require('../utils/roles');
-const { notifyUser } = require('../services/notificationService');
+const { notifyUser, notifyInternalTeam } = require('../services/notificationService');
 const { notifyIfLowStockCrossing } = require('./productController');
 const { transitionOrderStatus, ORDER_TRANSITIONS } = require('../services/orderStateService');
 const { buildCheckoutFields } = require('../services/payfastService');
@@ -10,20 +10,26 @@ const { applyDateRange, fetchAllRows } = require('../utils/exportQuery');
 const { filterBySearch } = require('../utils/searchFilter');
 const { logActivity, logForUser } = require('../services/activityLogService');
 const { friendlyRpcErrorMessage } = require('../utils/rpcErrorMessage');
+const { dbNowMs } = require('../utils/dbClock');
+const { formatCurrency } = require('../utils/formatCurrency');
 
-// Adds a server-computed seconds_remaining to each stock_reservations row,
-// alongside the raw expires_at. The frontend's countdown used to compare
-// expires_at directly against the customer's own device clock -- which
-// looks "already expired" the instant a reservation is created whenever
-// that device's clock disagrees with real time (wrong timezone, no NTP
-// sync, a phone that's just plain wrong -- all common). Computing the
-// remaining time here, on this one server clock, and shipping a plain
-// relative number instead of an absolute timestamp means the frontend never
-// needs to trust the client's own clock at all -- it just counts this
-// number down locally.
-function withReservationSecondsRemaining(order) {
+// Adds a seconds_remaining to each stock_reservations row, alongside the raw
+// expires_at, so the frontend counts down a plain relative number instead of
+// comparing an absolute timestamp against the customer's own device clock --
+// which looks "already expired" the moment a reservation is created whenever
+// that device's clock is wrong (bad timezone, no NTP sync, a phone that's
+// just plain wrong -- all common).
+//
+// The subtraction uses the *database* clock, not this process's. expires_at
+// was written by Postgres (now() + interval) and release_expired_
+// reservations() decides what has lapsed against now() as well, so the
+// database is the only clock that governs this deadline. Using Date.now()
+// here meant a host whose clock ran fast reported every fresh reservation as
+// expired -- an hour-fast dev machine made fast checkout unusable while
+// production, with a correct clock, was fine.
+async function withReservationSecondsRemaining(order) {
   if (!order?.stock_reservations) return order;
-  const nowMs = Date.now();
+  const nowMs = await dbNowMs();
   return {
     ...order,
     stock_reservations: order.stock_reservations.map((r) => ({
@@ -128,7 +134,7 @@ const getOrderById = asyncHandler(async (req, res) => {
 
   const { data, error } = await query.single();
   if (error || !data) return res.status(404).json({ error: 'Order not found' });
-  return res.json(withReservationSecondsRemaining(data));
+  return res.json(await withReservationSecondsRemaining(data));
 });
 
 // Admin/sales_rep only. Approval and cancellation run through Postgres functions
@@ -259,10 +265,56 @@ const getOrderStatus = asyncHandler(async (req, res) => {
 
   const { data, error } = await query.single();
   if (error || !data) return res.status(404).json({ error: 'Order not found' });
-  return res.json(withReservationSecondsRemaining(data));
+  return res.json(await withReservationSecondsRemaining(data));
+});
+
+// Customer only: be invoiced for this order instead of paying online.
+//
+// Offered on the order rather than at checkout, so every customer takes one
+// route to get here and only then chooses how to settle it. The RPC drops
+// the stock reservation (without restoring the stock -- the goods stay
+// committed) so no expiry timer applies to an invoice.
+const payOnInvoice = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  if (!req.user.can_order_on_account) {
+    return res.status(403).json({ error: 'This account is not set up to pay on invoice.' });
+  }
+
+  const { data: rows, error } = await supabase.rpc('switch_order_to_invoice', {
+    p_order_id: id,
+    p_customer_id: req.user.id,
+  });
+  if (error) return res.status(400).json({ error: friendlyRpcErrorMessage(error.message) });
+
+  const { data: order } = await supabase
+    .from('orders')
+    .select('order_number, total_amount')
+    .eq('id', id)
+    .single();
+
+  const customerLabel = req.user.company_name || req.user.email;
+  await Promise.all([
+    notifyInternalTeam({
+      type: 'general',
+      title: 'Order to be invoiced',
+      message: `${customerLabel} chose to be invoiced for order #${order?.order_number} (${formatCurrency(order?.total_amount)}). Record the payment once it reflects.`,
+      relatedType: 'order',
+      relatedId: id,
+    }),
+    logForUser(req.user, {
+      action: 'order.status_changed',
+      entityType: 'order',
+      entityId: id,
+      description: `${customerLabel} chose to pay order #${order?.order_number} on invoice.`,
+    }),
+  ]);
+
+  return res.json({ orderId: id, status: rows?.[0]?.order_status || 'awaiting_payment' });
 });
 
 module.exports = {
+  payOnInvoice,
   getCustomerOrders,
   getAllOrdersAdmin,
   exportOrdersAdmin,

@@ -5,7 +5,7 @@ import { formatCurrency, formatDate } from '../../utils/formatters';
 import { saveBlobResponse, blobErrorMessage } from '../../utils/downloadFile';
 import { isWithinDateRange } from '../../utils/dateRange';
 import { matchesSearch, recordSearchParts } from '../../utils/searchFilter';
-import { ORDER_STATUSES, statusLabel } from '../../utils/statusLabels';
+import { ORDER_STATUS_GROUPS, matchesStatusGroup, statusGroupLabel } from '../../utils/statusLabels';
 import ExportModal from '../../components/admin/ExportModal';
 import ListFilters from '../../components/admin/ListFilters';
 import Modal from '../../components/ui/Modal';
@@ -36,7 +36,7 @@ export default function AdminOrdersPage() {
       orders.filter(
         (o) =>
           (sourceFilter === 'all' || o.source === sourceFilter) &&
-          (statusFilter === 'all' || o.status === statusFilter) &&
+          matchesStatusGroup(statusFilter, o.status) &&
           matchesSearch(search, recordSearchParts(o, 'order_number'))
       ),
     [orders, sourceFilter, statusFilter, search]
@@ -48,7 +48,7 @@ export default function AdminOrdersPage() {
   // filters on screen, not just the date range chosen in the modal.
   const filterSummary = `${[
     sourceFilter === 'all' ? 'All sources' : `Source: ${sourceFilter}`,
-    statusFilter === 'all' ? 'all statuses' : `status: ${statusLabel(statusFilter)}`,
+    statusFilter === 'all' ? 'all statuses' : `status: ${statusGroupLabel(statusFilter)}`,
     search ? `search: "${search}"` : null,
   ]
     .filter(Boolean)
@@ -105,7 +105,7 @@ export default function AdminOrdersPage() {
         onSourceChange={setSourceFilter}
         status={statusFilter}
         onStatusChange={setStatusFilter}
-        statuses={ORDER_STATUSES}
+        statuses={ORDER_STATUS_GROUPS}
         shown={visibleOrders.length}
         total={orders.length}
         noun="orders"

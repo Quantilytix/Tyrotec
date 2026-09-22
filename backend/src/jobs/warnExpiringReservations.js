@@ -17,6 +17,7 @@
 require('dotenv').config();
 const supabase = require('../config/supabase');
 const { notifyUser } = require('../services/notificationService');
+const { dbNowMs } = require('../utils/dbClock');
 
 const LEAD_MINUTES = Number(process.env.RESERVATION_WARNING_LEAD_MINUTES) || 10;
 
@@ -46,12 +47,16 @@ async function run() {
     return;
   }
 
+  // Same reasoning as the order page's countdown: expires_at came from
+  // Postgres, so "how long is left" has to be measured against Postgres.
+  const nowMs = await dbNowMs();
+
   for (const order of orders) {
     // All of an order's reservation rows share one expires_at (set together,
     // in one call, by checkout_quote_with_reservation) -- any row's value is
     // the order's value.
     const expiresAt = order.stock_reservations?.[0]?.expires_at;
-    const minutesLeft = expiresAt ? Math.max(1, Math.round((new Date(expiresAt).getTime() - Date.now()) / 60000)) : LEAD_MINUTES;
+    const minutesLeft = expiresAt ? Math.max(1, Math.round((new Date(expiresAt).getTime() - nowMs) / 60000)) : LEAD_MINUTES;
 
     await notifyUser({
       userId: order.customer_id,

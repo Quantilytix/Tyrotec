@@ -1,17 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { getOrderById, getOrderStatus, initiatePayfastPayment, submitManualPaymentForReview } from '../api/orders';
-import { createPayment } from '../api/payments';
+import { useAuth } from '../context/AuthContext';
+import { getOrderById, getOrderStatus, initiatePayfastPayment, payOrderOnInvoice } from '../api/orders';
 import { formatCurrency, formatDate } from '../utils/formatters';
 import { displayTotals, lineTotals, vatRateLabel } from '../utils/vat';
 import { downloadReceiptPdf, getReceiptPayment } from '../utils/generateReceiptPdf';
 import StatusBadge from '../components/ui/StatusBadge';
 import Spinner from '../components/ui/Spinner';
 import Button from '../components/ui/Button';
-import Modal from '../components/ui/Modal';
 import Card from '../components/ui/Card';
 import TotalsSummary from '../components/ui/TotalsSummary';
-import PaymentForm from '../components/PaymentForm';
 import PayfastRedirectForm from '../components/PayfastRedirectForm';
 
 const POLL_MS = 5000;
@@ -52,11 +50,13 @@ function ReservationCountdown({ secondsRemaining: initialSeconds }) {
 
 export default function OrderDetailPage() {
   const { id } = useParams();
+  const { user } = useAuth();
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [payfastCheckout, setPayfastCheckout] = useState(null);
   const [redirecting, setRedirecting] = useState(false);
+  const [switchingToInvoice, setSwitchingToInvoice] = useState(false);
+  const [error, setError] = useState('');
   const lastStatus = useRef(null);
 
   const load = () => getOrderById(id).then(({ data }) => setOrder(data));
@@ -97,18 +97,33 @@ export default function OrderDetailPage() {
     ? [...order.payments].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0]
     : null;
   const isStockReserved = order.status === 'stock_reserved';
-  const canSubmitPayment = (order.status === 'approved' || isStockReserved) && !activePayment;
+  // PayFast is the only way a customer can pay themselves. An 'approved'
+  // order (the staff-approval route) is settled offline and recorded by the
+  // team, so it shows an explanation here rather than a button.
+  const canPayOnline = isStockReserved && !activePayment;
+  // Two ways an order waits on money the customer doesn't pay online:
+  // 'approved' (staff-review route) and 'awaiting_payment' (ordered on
+  // account). Neither has a timer; both are settled by staff recording the
+  // payment.
+  const isOnAccount = order.status === 'awaiting_payment';
+  const awaitingOfflinePayment = ['approved', 'awaiting_payment'].includes(order.status) && !activePayment;
   const reservation = order.stock_reservations?.[0];
   const hasReceipt = Boolean(getReceiptPayment(order));
 
-  const handleSubmitPayment = async (payload) => {
-    if (isStockReserved) {
-      await submitManualPaymentForReview(order.id, payload);
-    } else {
-      await createPayment({ order_id: order.id, ...payload });
+  // Offered here rather than at checkout: everyone takes the same route to
+  // get an order, and only an approved account then chooses to be invoiced
+  // instead of paying online.
+  const handlePayOnInvoice = async () => {
+    setError('');
+    setSwitchingToInvoice(true);
+    try {
+      await payOrderOnInvoice(order.id);
+      await load();
+    } catch (err) {
+      setError(err.response?.data?.error || 'Could not switch this order to an invoice.');
+    } finally {
+      setSwitchingToInvoice(false);
     }
-    setShowPaymentModal(false);
-    await load();
   };
 
   const handlePayfastRetry = async () => {
@@ -185,6 +200,16 @@ export default function OrderDetailPage() {
         </Card>
       )}
 
+      {awaitingOfflinePayment && (
+        <Card className="mt-6 p-4">
+          <p className="text-sm text-slate-600">
+            {isOnAccount
+              ? 'This order is placed on account and your stock is set aside. Payment is due on invoice — your receipt appears here as soon as it reflects.'
+              : 'Your order is approved and awaiting payment. Our team will be in touch with payment details, and your receipt appears here as soon as the payment reflects.'}
+          </p>
+        </Card>
+      )}
+
       <Card className="mt-6 flex items-center justify-between p-4">
         <TotalsSummary totals={displayTotals(order)} className="text-left" />
         <div className="flex items-center gap-3">
@@ -197,31 +222,25 @@ export default function OrderDetailPage() {
               Download receipt
             </Button>
           )}
-          {canSubmitPayment && isStockReserved && (
-            <Button variant="secondary" onClick={() => setShowPaymentModal(true)}>
-              Pay via bank transfer instead
+          {error && <p className="text-sm text-bad-500">{error}</p>}
+          {canPayOnline && user?.can_order_on_account && (
+            <Button
+              variant="secondary"
+              onClick={handlePayOnInvoice}
+              loading={switchingToInvoice}
+              disabled={redirecting}
+            >
+              Pay on invoice
             </Button>
           )}
-          {canSubmitPayment && isStockReserved && (
-            <Button onClick={handlePayfastRetry} loading={redirecting}>
-              Pay with PayFast
+          {canPayOnline && (
+            <Button onClick={handlePayfastRetry} loading={redirecting} disabled={switchingToInvoice}>
+              Pay now
             </Button>
-          )}
-          {canSubmitPayment && !isStockReserved && (
-            <Button onClick={() => setShowPaymentModal(true)}>Submit payment</Button>
           )}
         </div>
       </Card>
 
-      {showPaymentModal && (
-        <Modal title="Submit payment" onClose={() => setShowPaymentModal(false)}>
-          <PaymentForm
-            defaultAmount={order.total_amount}
-            onSubmit={handleSubmitPayment}
-            onCancel={() => setShowPaymentModal(false)}
-          />
-        </Modal>
-      )}
     </div>
   );
 }

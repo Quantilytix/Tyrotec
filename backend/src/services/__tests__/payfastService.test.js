@@ -8,6 +8,9 @@ describe('payfastService', () => {
       PAYFAST_MERCHANT_ID: '10000100',
       PAYFAST_MERCHANT_KEY: '46f0cd694581a',
       PAYFAST_PASSPHRASE: 'test-passphrase',
+      // Sandbox signs with its own passphrase, never the live account's --
+      // see credentials() in payfastService.js.
+      PAYFAST_SANDBOX_PASSPHRASE: 'test-passphrase',
       PAYFAST_RETURN_URL: 'https://example.com/return',
       PAYFAST_CANCEL_URL: 'https://example.com/cancel',
       BACKEND_URL: 'https://api.example.com',
@@ -17,6 +20,74 @@ describe('payfastService', () => {
 
   afterAll(() => {
     process.env = ORIGINAL_ENV;
+  });
+
+  // The sandbox is a separate PayFast system with its own merchant accounts.
+  // Posting live credentials to it fails with "merchant id not found", which
+  // is what happens when PAYFAST_MODE=sandbox is set and the live values are
+  // simply left in place.
+  describe('credentials per mode', () => {
+    it('bills the same merchant in sandbox mode', () => {
+      process.env.PAYFAST_MERCHANT_ID = '10053760';
+      process.env.PAYFAST_MERCHANT_KEY = 'live-key';
+      const { buildCheckoutFields } = require('../payfastService');
+
+      const { fields } = buildCheckoutFields(
+        { id: 'order-1', order_number: 42, total_amount: 100 },
+        { email: 'a@b.com' }
+      );
+
+      expect(fields.merchant_id).toBe('10053760');
+      expect(fields.merchant_key).toBe('live-key');
+    });
+
+    it('prefers explicit sandbox credentials when they are configured', () => {
+      process.env.PAYFAST_SANDBOX_MERCHANT_ID = '10099999';
+      process.env.PAYFAST_SANDBOX_MERCHANT_KEY = 'my-sandbox-key';
+      const { buildCheckoutFields } = require('../payfastService');
+
+      const { fields } = buildCheckoutFields(
+        { id: 'order-1', order_number: 42, total_amount: 100 },
+        { email: 'a@b.com' }
+      );
+
+      expect(fields.merchant_id).toBe('10099999');
+      expect(fields.merchant_key).toBe('my-sandbox-key');
+    });
+
+    it('signs with the live passphrase in live mode', () => {
+      process.env.PAYFAST_MODE = 'live';
+      process.env.PAYFAST_PASSPHRASE = 'live-passphrase';
+      const { credentials } = require('../payfastService');
+
+      expect(credentials().passphrase).toBe('live-passphrase');
+    });
+
+    it('uses the live merchant in live mode', () => {
+      process.env.PAYFAST_MODE = 'live';
+      process.env.PAYFAST_MERCHANT_ID = '10053760';
+      process.env.PAYFAST_MERCHANT_KEY = 'live-key';
+      const { buildCheckoutFields } = require('../payfastService');
+
+      const { fields } = buildCheckoutFields(
+        { id: 'order-1', order_number: 42, total_amount: 100 },
+        { email: 'a@b.com' }
+      );
+
+      expect(fields.merchant_id).toBe('10053760');
+      expect(fields.merchant_key).toBe('live-key');
+    });
+
+    // The live passphrase belongs to the live account. Reusing it against a
+    // sandbox account that has none produces "Generated signature does not
+    // match submitted signature" -- confirmed against the real sandbox.
+    it('does not sign sandbox checkouts with the live passphrase', () => {
+      delete process.env.PAYFAST_SANDBOX_PASSPHRASE;
+      process.env.PAYFAST_PASSPHRASE = 'live-passphrase';
+      const { credentials } = require('../payfastService');
+
+      expect(credentials().passphrase).toBeUndefined();
+    });
   });
 
   describe('isSandbox / checkoutUrl (via buildCheckoutFields)', () => {
@@ -84,6 +155,7 @@ describe('payfastService', () => {
 
     it('validates a real captured PayFast ITN payload with blank fields (regression: PayFast signs blanks on this direction, unlike the outbound checkout signature which must skip them)', () => {
       process.env.PAYFAST_PASSPHRASE = '';
+      delete process.env.PAYFAST_SANDBOX_PASSPHRASE;
       const { verifyItnSignature } = require('../payfastService');
       // Captured live from a real PayFast sandbox ITN callback -- this exact
       // payload was silently rejected before computeSignature() learned to

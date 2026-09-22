@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { getQuoteById, convertQuoteToOrder, checkoutQuoteFast } from '../api/quotes';
+import { getQuoteById, checkoutQuoteFast } from '../api/quotes';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrency, formatDate } from '../utils/formatters';
 import { displayTotals, lineTotals, vatRateLabel } from '../utils/vat';
@@ -17,7 +17,6 @@ export default function QuoteDetailPage() {
   const { user } = useAuth();
   const [quote, setQuote] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [converting, setConverting] = useState(false);
   const [checkingOut, setCheckingOut] = useState(false);
   const [error, setError] = useState('');
 
@@ -27,25 +26,12 @@ export default function QuoteDetailPage() {
       .finally(() => setLoading(false));
   }, [quoteId]);
 
-  const handleConvert = async () => {
-    setError('');
-    setConverting(true);
-    try {
-      const { data } = await convertQuoteToOrder(quoteId);
-      navigate(`/orders/${data.orderId}`);
-    } catch (err) {
-      setError(err.response?.data?.error || 'Could not convert this quote.');
-    } finally {
-      setConverting(false);
-    }
-  };
-
-  // Fast, automated path: check+reserve stock immediately so nobody else can
-  // buy it out from under this order, then hand off to the order page --
-  // payment (PayFast or bank transfer) is always a separate, explicit step
-  // the customer takes from there, never auto-triggered here. If stock was
-  // short, the order still gets created but falls back to the same
-  // manual-approval queue "Convert to order" uses.
+  // The customer's one action on a quote. Stock is checked and reserved
+  // immediately so nobody buys it out from under them, then they land on the
+  // order page -- payment is always a separate, explicit step taken there,
+  // never auto-triggered here. If stock is short the order is still created,
+  // falling back to the staff-approval queue; that's the system's decision,
+  // not something the customer should have to understand or choose.
   const handleFastCheckout = async () => {
     setError('');
     setCheckingOut(true);
@@ -53,7 +39,7 @@ export default function QuoteDetailPage() {
       const { data } = await checkoutQuoteFast(quoteId);
       navigate(`/orders/${data.orderId}`);
     } catch (err) {
-      setError(err.response?.data?.error || 'Could not start checkout.');
+      setError(err.response?.data?.error || 'Could not place this order.');
       setCheckingOut(false);
     }
   };
@@ -130,28 +116,17 @@ export default function QuoteDetailPage() {
         <TotalsSummary totals={displayTotals(quote)} className="text-left" />
         <div className="flex items-center gap-3">
           {error && <p className="text-sm text-bad-500">{error}</p>}
-          <Button variant="secondary" onClick={handleDownload}>
-            Download quote
-          </Button>
+          <button
+            type="button"
+            onClick={handleDownload}
+            className="text-sm text-teal-600 transition-colors duration-150 hover:underline"
+          >
+            Download PDF
+          </button>
           {canConvert && (
-            <>
-              <div className="flex flex-col items-center gap-1">
-                <Button variant="secondary" onClick={handleConvert} loading={converting} disabled={checkingOut}>
-                  Convert to order
-                </Button>
-                <p className="max-w-[10rem] text-center text-xs text-slate-400">
-                  Sent for staff review first, pay by EFT once approved
-                </p>
-              </div>
-              <div className="flex flex-col items-center gap-1">
-                <Button onClick={handleFastCheckout} loading={checkingOut} disabled={converting}>
-                  Checkout now
-                </Button>
-                <p className="max-w-[10rem] text-center text-xs text-slate-400">
-                  Stock reserved immediately, pay by card or EFT right away
-                </p>
-              </div>
-            </>
+            <Button onClick={handleFastCheckout} loading={checkingOut}>
+              Accept &amp; order
+            </Button>
           )}
           {quote.status === 'converted' && (
             <p className="text-sm text-slate-500">This quote has already been converted to an order.</p>

@@ -17,11 +17,9 @@ export const initiatePayfastPayment = (orderId) => apiClient.post(`/orders/${ord
 // Lean, poll-friendly status lookup for OrderStatusPanel.jsx.
 export const getOrderStatus = (orderId) => apiClient.get(`/orders/${orderId}/status`);
 
-// The manual bank-transfer fallback for a stock_reserved (or, same as
-// today, approved) order -- always routes to the admin review queue,
-// never auto-confirms.
-export const submitManualPaymentForReview = (orderId, payload) =>
-  apiClient.post(`/orders/${orderId}/manual-payment`, payload);
+// Be invoiced for this order instead of paying online. Only offered to
+// accounts a staff member has approved for it; drops the reservation timer.
+export const payOrderOnInvoice = (orderId) => apiClient.post(`/orders/${orderId}/pay-on-invoice`);
 
 // Excel export: one sheet of orders (including payment details), one of their
 // line items. Optional source and created-at date range (YYYY-MM-DD).

@@ -1,24 +1,47 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { getCustomerDetailAdmin } from '../../api/customers';
+import { getCustomerDetailAdmin, setCustomerAccountTerms } from '../../api/customers';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import StatusBadge from '../../components/ui/StatusBadge';
 import SourceBadge from '../../components/ui/SourceBadge';
 import Spinner from '../../components/ui/Spinner';
 import EmptyState from '../../components/ui/EmptyState';
 import Card from '../../components/ui/Card';
+import Button from '../../components/ui/Button';
+import ConfirmDialog from '../../components/ui/ConfirmDialog';
 
 export default function AdminCustomerDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [customer, setCustomer] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [confirmingTerms, setConfirmingTerms] = useState(false);
+  const [savingTerms, setSavingTerms] = useState(false);
+  const [termsError, setTermsError] = useState('');
 
   useEffect(() => {
     getCustomerDetailAdmin(id)
       .then(({ data }) => setCustomer(data))
       .finally(() => setLoading(false));
   }, [id]);
+
+  // Turning this on lets the customer take goods before paying, so it's
+  // confirmed rather than a one-click toggle, and the API records it in the
+  // audit log either way.
+  const applyAccountTerms = async () => {
+    setTermsError('');
+    setSavingTerms(true);
+    try {
+      const next = !customer.can_order_on_account;
+      await setCustomerAccountTerms(id, next);
+      setCustomer((c) => ({ ...c, can_order_on_account: next }));
+      setConfirmingTerms(false);
+    } catch (err) {
+      setTermsError(err.response?.data?.error || 'Could not update this setting.');
+    } finally {
+      setSavingTerms(false);
+    }
+  };
 
   if (loading) return <Spinner />;
   if (!customer) return <p className="text-sm text-slate-500">Customer not found.</p>;
@@ -62,6 +85,42 @@ export default function AdminCustomerDetailPage() {
           </p>
         </Card>
       </div>
+
+      <Card className="mt-6 flex flex-wrap items-center justify-between gap-4 p-4">
+        <div>
+          <p className="text-sm font-medium text-ink">Ordering on account</p>
+          <p className="mt-1 max-w-xl text-sm text-slate-500">
+            {customer.can_order_on_account
+              ? 'This customer can place orders payable on invoice. Stock is committed when they order, and payment is recorded by your team once it reflects.'
+              : 'This customer must pay through PayFast before an order is confirmed. Enable this to let them order on invoice instead.'}
+          </p>
+          {termsError && <p className="mt-2 text-sm text-bad-500">{termsError}</p>}
+        </div>
+        <div className="flex items-center gap-3">
+          <StatusBadge status={customer.can_order_on_account ? 'approved' : 'expired'} />
+          <Button
+            variant={customer.can_order_on_account ? 'danger' : 'primary'}
+            onClick={() => setConfirmingTerms(true)}
+          >
+            {customer.can_order_on_account ? 'Disable' : 'Enable'}
+          </Button>
+        </div>
+      </Card>
+
+      {confirmingTerms && (
+        <ConfirmDialog
+          title={customer.can_order_on_account ? 'Stop account ordering?' : 'Allow ordering on account?'}
+          message={
+            customer.can_order_on_account
+              ? `${customer.company_name || customer.email} will have to pay through PayFast again. Orders already placed on account are unaffected.`
+              : `${customer.company_name || customer.email} will be able to place orders without paying first. Stock is committed immediately and you collect payment on invoice.`
+          }
+          confirmLabel={customer.can_order_on_account ? 'Disable' : 'Enable'}
+          onConfirm={applyAccountTerms}
+          onCancel={() => setConfirmingTerms(false)}
+          loading={savingTerms}
+        />
+      )}
 
       <h2 className="mt-8 font-display text-base font-semibold text-ink">Orders</h2>
       {customer.orders.length === 0 ? (

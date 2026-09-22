@@ -16,10 +16,6 @@ const REASON_ACTIONS = {
     { action: 'approve', label: 'Approve anyway', variant: 'primary' },
     { action: 'reject', label: 'Reject', variant: 'danger' },
   ],
-  manual_payment: [
-    { action: 'approve', label: 'Approve payment', variant: 'primary' },
-    { action: 'reject', label: 'Reject payment', variant: 'danger' },
-  ],
   high_value: [
     { action: 'acknowledge', label: 'Acknowledge', variant: 'secondary' },
     { action: 'cancel', label: 'Cancel order', variant: 'danger' },
@@ -32,7 +28,6 @@ const REASON_ACTIONS = {
 
 const REASON_LABELS = {
   stock_short: 'Insufficient stock',
-  manual_payment: 'Manual payment submitted',
   high_value: 'High-value order',
   new_customer: 'First-time customer',
 };

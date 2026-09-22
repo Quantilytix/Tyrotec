@@ -65,7 +65,17 @@ function humanise(value) {
 // same thing as the screen it was exported from.
 const STATUS_LABELS = {
   submitted: 'Quote Finalized',
+  converted: 'Converted',
+  expired: 'Expired',
+  pending_approval: 'Awaiting approval',
+  approved: 'Awaiting payment',
+  stock_reserved: 'Awaiting payment',
+  awaiting_payment: 'Awaiting payment',
   confirmed: 'Paid',
+  processing: 'Paid',
+  ready_for_collection: 'Ready for collection',
+  completed: 'Completed',
+  cancelled: 'Cancelled',
 };
 
 function statusLabel(status) {

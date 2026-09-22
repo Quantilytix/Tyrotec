@@ -6,7 +6,6 @@ const mainMenu = require('../services/whatsappFlows/mainMenu');
 const productBrowsing = require('../services/whatsappFlows/productBrowsing');
 const quoteBuilding = require('../services/whatsappFlows/quoteBuilding');
 const orderConversion = require('../services/whatsappFlows/orderConversion');
-const paymentSubmission = require('../services/whatsappFlows/paymentSubmission');
 const history = require('../services/whatsappFlows/history');
 
 // Meta's one-time handshake when the webhook URL is registered in the Meta
@@ -100,12 +99,6 @@ async function routeMessage(conversation, message) {
     case 'order_selecting_quote':
     case 'order_reviewing_quote':
       return orderConversion.handle(conversation, message);
-    case 'payment_selecting_order':
-    case 'payment_awaiting_method':
-    case 'payment_awaiting_reference':
-    case 'payment_awaiting_amount':
-    case 'payment_reviewing':
-      return paymentSubmission.handle(conversation, message);
     case 'history_selecting_quote':
     case 'history_selecting_order':
       return history.handle(conversation, message);

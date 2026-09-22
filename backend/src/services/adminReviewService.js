@@ -1,5 +1,4 @@
 const supabase = require('../config/supabase');
-const { reviewPayment } = require('./paymentService');
 const { friendlyRpcErrorMessage } = require('../utils/rpcErrorMessage');
 
 const HIGH_VALUE_STATUSES = ['completed', 'confirmed', 'ready_for_collection'];
@@ -48,10 +47,6 @@ async function flagStockShort(orderId) {
   await insertReview(orderId, 'stock_short');
 }
 
-async function flagManualPayment(orderId) {
-  await insertReview(orderId, 'manual_payment');
-}
-
 async function listPendingReviews() {
   const { data, error } = await supabase
     .from('admin_reviews')
@@ -65,8 +60,13 @@ async function listPendingReviews() {
 
 // action depends on the review's reason -- each branch reuses the existing
 // mechanism for that kind of state change rather than reimplementing it:
-// approve_order/cancel_order (stock_short), reviewPayment (manual_payment),
-// or a plain resolve/cancel for the two non-blocking flags.
+// approve_order/cancel_order (stock_short), or a plain resolve/cancel for the
+// two non-blocking flags.
+//
+// There is no longer a 'manual_payment' reason. Customers can't declare their
+// own payments any more, and a payment a staff member records is verified by
+// the act of recording it (paymentService.js), so nothing needs a second pair
+// of eyes in this queue.
 async function resolveReview(reviewId, action, reviewerId) {
   const { data: review, error: findErr } = await supabase
     .from('admin_reviews')
@@ -86,23 +86,6 @@ async function resolveReview(reviewId, action, reviewerId) {
     const rpc = action === 'approve' ? 'approve_order' : 'cancel_order';
     const { error } = await supabase.rpc(rpc, { p_order_id: review.order_id });
     if (error) return { error: friendlyRpcErrorMessage(error.message), status: 400 };
-  } else if (review.reason === 'manual_payment') {
-    if (!['approve', 'reject'].includes(action)) {
-      return { error: "Action must be 'approve' or 'reject' for a manual_payment review.", status: 400 };
-    }
-    const { data: payment, error: payErr } = await supabase
-      .from('payments')
-      .select('id')
-      .eq('order_id', review.order_id)
-      .eq('status', 'submitted')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (payErr) throw payErr;
-    if (!payment) return { error: 'No pending payment found for this order.', status: 404 };
-
-    const result = await reviewPayment(payment.id, action === 'approve' ? 'approved' : 'rejected', reviewerId);
-    if (result.error) return result;
   } else {
     // high_value / new_customer -- informational flags on an order that's
     // otherwise already proceeding (or already sitting in the manual queue
@@ -125,4 +108,4 @@ async function resolveReview(reviewId, action, reviewerId) {
   return { reviewId, action, reason: review.reason, orderId: review.order_id, orderNumber: review.orders?.order_number };
 }
 
-module.exports = { flagIfNeeded, flagStockShort, flagManualPayment, listPendingReviews, resolveReview };
+module.exports = { flagIfNeeded, flagStockShort, listPendingReviews, resolveReview };

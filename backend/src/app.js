@@ -19,6 +19,7 @@ const staffRoutes = require('./routes/staffRoutes');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 const { startInProcessJobs } = require('./jobs/inProcessScheduler');
 const { isEnabled } = require('./utils/envFlag');
+const { syncDbClock } = require('./utils/dbClock');
 
 const app = express();
 
@@ -116,6 +117,12 @@ const server = app.listen(PORT, () => {
   if (missingEnv.length > 0) {
     console.warn(`Missing environment variables (the features that use them won't work): ${missingEnv.join(', ')}`);
   }
+  // Measure the gap between this host's clock and the database's up front,
+  // so the first order page already counts down correctly and a badly set
+  // host clock is reported at boot rather than discovered as a mysterious
+  // "reservation expired".
+  syncDbClock();
+
   if (!process.env.BREVO_API_KEY && !process.env.SMTP_HOST) {
     console.warn('No email provider configured (BREVO_API_KEY or SMTP_HOST): email notifications are disabled.');
   } else if (!process.env.EMAIL_FROM && !process.env.SMTP_FROM) {

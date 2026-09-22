@@ -42,11 +42,17 @@ export default function ListFilters({
 
       <select value={status} onChange={(e) => onStatusChange(e.target.value)} className={`${CONTROL} capitalize`}>
         <option value="all">All statuses</option>
-        {statuses.map((value) => (
-          <option key={value} value={value}>
-            {statusLabel(value)}
-          </option>
-        ))}
+        {statuses.map((entry) => {
+          // Quotes pass plain stored statuses; orders pass grouped ones,
+          // where several stored statuses share a single option.
+          const value = typeof entry === 'string' ? entry : entry.value;
+          const label = typeof entry === 'string' ? statusLabel(entry) : entry.label;
+          return (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          );
+        })}
       </select>
 
       {filtering && (
