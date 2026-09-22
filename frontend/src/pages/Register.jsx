@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import Button from '../components/ui/Button';
 import GoogleButton from '../components/ui/GoogleButton';
 import AuthLayout from '../components/layout/AuthLayout';
+import PasswordInput from '../components/ui/PasswordInput';
 
 export default function Register() {
   const { register } = useAuth();
@@ -133,15 +134,15 @@ export default function Register() {
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-600">Password</label>
-                <input
-                  type="password"
-                  required
-                  minLength={8}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none transition-colors duration-150 focus:border-teal-500"
-                  placeholder="At least 8 characters"
-                />
+                <div className="mt-1">
+                  <PasswordInput
+                    required
+                    minLength={8}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="At least 8 characters"
+                  />
+                </div>
               </div>
 
               {error && (

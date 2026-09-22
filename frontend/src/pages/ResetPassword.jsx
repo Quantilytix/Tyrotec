@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { resetPasswordRequest } from '../api/auth';
 import Button from '../components/ui/Button';
+import PasswordInput from '../components/ui/PasswordInput';
 
 // Supabase's reset email links here with the recovery token in the URL
 // fragment (#access_token=...&type=recovery), not a query string -- read it
@@ -54,15 +55,15 @@ export default function ResetPassword() {
           <form onSubmit={handleSubmit} className="mt-6 space-y-4">
             <div>
               <label className="block text-xs font-medium text-slate-600">New password</label>
-              <input
-                type="password"
-                required
-                minLength={8}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-teal-500"
-                placeholder="At least 8 characters"
-              />
+              <div className="mt-1">
+                <PasswordInput
+                  required
+                  minLength={8}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="At least 8 characters"
+                />
+              </div>
             </div>
 
             {error && <p className="rounded-lg bg-bad-50 px-3 py-2 text-sm text-bad-500">{error}</p>}
