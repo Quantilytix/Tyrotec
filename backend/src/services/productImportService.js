@@ -1,5 +1,4 @@
 const supabase = require('../config/supabase');
-const { notifyIfLowStockCrossing } = require('../controllers/productController');
 const { listCategoryNames } = require('./categoryService');
 
 const DEFAULT_AVAILABILITY = 'local';
@@ -41,11 +40,13 @@ async function matchExtractedRows(rows) {
   });
 }
 
-// rows are admin-reviewed/edited, each tagged action: 'restock' | 'create' | 'skip'.
-// Row-level try/catch so one bad row (duplicate SKU, product deleted mid-review,
-// etc.) doesn't abort the rest of the batch.
+// rows are admin-reviewed/edited, each tagged action: 'create' | 'skip'.
+// The import adds products to the catalogue only. Stock arrives through a
+// purchase (Purchases -> scan supplier invoice), which records its supplier and
+// cost; the old 'restock' action, which added stock with neither, is gone.
+// Row-level try/catch so one bad row (duplicate SKU, etc.) doesn't abort the
+// rest of the batch.
 async function confirmProductImport(rows) {
-  const restocked = [];
   const created = [];
   const errors = [];
 
@@ -59,24 +60,7 @@ async function confirmProductImport(rows) {
 
     try {
       if (row.action === 'restock') {
-        const { data: existing, error: findErr } = await supabase
-          .from('products')
-          .select('*')
-          .eq('id', row.productId)
-          .single();
-        if (findErr || !existing) throw new Error('Product not found');
-
-        const newStock = existing.stock_quantity + Number(row.quantity || 0);
-        const { data: updated, error: updateErr } = await supabase
-          .from('products')
-          .update({ stock_quantity: newStock })
-          .eq('id', row.productId)
-          .select()
-          .single();
-        if (updateErr) throw updateErr;
-
-        await notifyIfLowStockCrossing(existing.stock_quantity, updated);
-        restocked.push(updated);
+        throw new Error('Stock is now added with a purchase. Record this delivery under Purchases.');
       } else if (row.action === 'create') {
         // Imports are the other door into the catalogue, so they hold to the
         // same rule as the product form: a new product's category comes from
@@ -99,7 +83,7 @@ async function confirmProductImport(rows) {
               category,
               description: row.description || null,
               unit_price: row.unit_price,
-              stock_quantity: row.quantity || 0,
+              stock_quantity: 0,
               availability: row.availability || DEFAULT_AVAILABILITY,
               lead_time_days: row.lead_time_days ?? DEFAULT_LEAD_TIME_DAYS,
               min_order_qty: row.min_order_qty ?? DEFAULT_MIN_ORDER_QTY,
@@ -115,7 +99,7 @@ async function confirmProductImport(rows) {
     }
   }
 
-  return { restocked, created, errors };
+  return { created, errors };
 }
 
 module.exports = { matchExtractedRows, confirmProductImport };

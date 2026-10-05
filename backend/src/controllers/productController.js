@@ -9,6 +9,8 @@ const { fetchAllRows } = require('../utils/exportQuery');
 const { LOW_STOCK_THRESHOLD } = require('../config/constants');
 const { logForUser } = require('../services/activityLogService');
 const { formatCurrency } = require('../utils/formatCurrency');
+const { isStaff } = require('../utils/roles');
+const { publicProductView } = require('../services/stockService');
 
 const PRODUCT_IMAGES_BUCKET = 'Product Images';
 
@@ -35,6 +37,11 @@ async function notifyIfLowStockCrossing(previousStock, product) {
 // any other unexpected column) directly -- insert([req.body]) / update(req.body)
 // would otherwise pass those straight through to Postgres, letting a caller
 // rewrite a product's primary key via PATCH.
+//
+// Not here on purpose: stock_quantity and supplier_cost. Stock changes only
+// through purchases, stock adjustments and orders, and supplier_cost is the
+// weighted-average cost those purchases maintain (stockService.js). The
+// supplier_* text fields are copied from the chosen supplier (supplier_id).
 const WRITABLE_FIELDS = [
   'sku',
   'name',
@@ -42,16 +49,11 @@ const WRITABLE_FIELDS = [
   'description',
   'unit_price',
   'vat_applicable',
-  'stock_quantity',
   'availability',
   'lead_time_days',
   'min_order_qty',
   'image_url',
-  'supplier_name',
-  'supplier_location',
-  'supplier_email',
-  'supplier_phone',
-  'supplier_cost',
+  'supplier_id',
 ];
 
 // Describes what actually changed, field by field, so the audit log shows
@@ -91,6 +93,36 @@ function pickWritableFields(body) {
     if (body[field] !== undefined) result[field] = body[field];
   }
   return result;
+}
+
+// Resolves supplier_id into the plain-text supplier copies products carry.
+// Returns { fields } or { error, status }.
+async function withSupplierCopies(fields) {
+  if (fields.supplier_id === undefined) return { fields };
+  if (fields.supplier_id === null || fields.supplier_id === '') {
+    return { error: 'Choose a supplier for this product.', status: 400 };
+  }
+  const { data: supplier } = await supabase
+    .from('suppliers')
+    .select('id, name, location, email, phone, is_active')
+    .eq('id', fields.supplier_id)
+    .maybeSingle();
+  if (!supplier) return { error: 'Supplier not found.', status: 400 };
+  if (!supplier.is_active) return { error: `${supplier.name} is inactive. Choose an active supplier.`, status: 400 };
+  return {
+    fields: {
+      ...fields,
+      supplier_name: supplier.name,
+      supplier_location: supplier.location,
+      supplier_email: supplier.email,
+      supplier_phone: supplier.phone,
+    },
+  };
+}
+
+// Customers get the catalogue view only: never supplier details or costs.
+function viewFor(user, product) {
+  return isStaff(user?.role) ? product : publicProductView(product);
 }
 
 // Admin/sales_rep only. Takes one multipart file (see the `upload` multer
@@ -151,7 +183,7 @@ const getAllProducts = asyncHandler(async (req, res) => {
   const { data, error, count } = await query;
   if (error) throw error;
 
-  return res.json({ data, page: pageNum, limit: limitNum, total: count });
+  return res.json({ data: (data || []).map((product) => viewFor(req.user, product)), page: pageNum, limit: limitNum, total: count });
 });
 
 // Admin/sales_rep only. The same search and category filters as the product
@@ -190,11 +222,14 @@ const getProductById = asyncHandler(async (req, res) => {
     .single();
 
   if (error || !data) return res.status(404).json({ error: 'Product not found' });
-  return res.json(data);
+  return res.json(viewFor(req.user, data));
 });
 
+// New products start with no stock: it arrives through a purchase.
 const createProduct = asyncHandler(async (req, res) => {
-  const fields = pickWritableFields(req.body);
+  const resolved = await withSupplierCopies(pickWritableFields(req.body));
+  if (resolved.error) return res.status(resolved.status).json({ error: resolved.error });
+  const fields = { ...resolved.fields, stock_quantity: 0 };
 
   const categoryProblem = await assertCategoryAllowed(fields.category);
   if (categoryProblem) return res.status(categoryProblem.status).json({ error: categoryProblem.error });
@@ -211,27 +246,24 @@ const createProduct = asyncHandler(async (req, res) => {
     action: 'product.created',
     entityType: 'product',
     entityId: data.id,
-    description: `Added product ${data.name} (${data.sku}) at ${formatCurrency(data.unit_price)} excl. VAT, stock ${data.stock_quantity}.`,
+    description: `Added product ${data.name} (${data.sku}) at ${formatCurrency(data.unit_price)} excl. VAT${data.supplier_name ? `, supplier ${data.supplier_name}` : ''}.`,
   });
 
   return res.status(201).json(data);
 });
 
 const updateProduct = asyncHandler(async (req, res) => {
-  const fields = pickWritableFields(req.body);
+  const resolved = await withSupplierCopies(pickWritableFields(req.body));
+  if (resolved.error) return res.status(resolved.status).json({ error: resolved.error });
+  const { fields } = resolved;
 
-  // Only need the "before" values when stock or category are actually part of
-  // this edit -- an extra read on every unrelated product edit (name, price,
-  // etc.) would be wasted.
-  // Read the row first: the audit entry records what each field changed from,
-  // and the low-stock alert needs the previous stock level.
+  // Read the row first: the audit entry records what each field changed from.
   const { data: existing } = await supabase
     .from('products')
     .select('*')
     .eq('id', req.params.id)
     .single();
 
-  const previousStock = fields.stock_quantity !== undefined ? existing?.stock_quantity ?? null : null;
   const previousCategory = existing?.category ?? null;
 
   // Products created before the managed category list exists keep categories
@@ -251,10 +283,6 @@ const updateProduct = asyncHandler(async (req, res) => {
 
   if (error) return res.status(400).json({ error: error.message });
   if (!data) return res.status(404).json({ error: 'Product not found' });
-
-  if (previousStock !== null) {
-    await notifyIfLowStockCrossing(previousStock, data);
-  }
 
   const changes = describeChanges(existing, fields);
   if (changes.length > 0) {
@@ -282,7 +310,7 @@ const deleteProduct = asyncHandler(async (req, res) => {
     // quote_items/order_items, so it can't be hard-deleted.
     if (error.code === '23503') {
       return res.status(409).json({
-        error: "This product is referenced by existing quotes or orders and can't be deleted. Set its stock to 0 instead.",
+        error: "This product is on existing quotes, orders or purchases and can't be deleted.",
       });
     }
     throw error;

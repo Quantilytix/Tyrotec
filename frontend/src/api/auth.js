@@ -18,6 +18,9 @@ export const loginRequest = (email, password) =>
 export const oauthCompleteRequest = (access_token) =>
   apiClient.post('/auth/oauth-complete', { access_token });
 
+// Staff opening the portal from QX: trades QX's one-time code for a session.
+export const qxSsoRequest = (code) => apiClient.post('/auth/qx-sso', { code });
+
 export const getMeRequest = () => apiClient.get('/auth/me');
 
 export const updateMeRequest = (fields) => apiClient.patch('/auth/me', fields);

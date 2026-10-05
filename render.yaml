@@ -135,3 +135,13 @@ services:
         sync: false
       - key: GEMINI_API_KEY
         sync: false
+      # QX (accounting) connection: the connector URL ends in /api/connect/v1,
+      # the key is the one QX showed when the connection was created.
+      - key: QX_CONNECT_URL
+        sync: false
+      - key: QX_CONNECT_KEY
+        sync: false
+      # "true" also sends data to QX. Leave "false" to use the connection for
+      # signing in from QX only; changes keep queuing until it's switched on.
+      - key: QX_SYNC_ENABLED
+        value: "false"

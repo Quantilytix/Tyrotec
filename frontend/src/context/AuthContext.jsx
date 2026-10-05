@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react';
-import { loginRequest, registerRequest, getMeRequest, updateMeRequest, oauthCompleteRequest } from '../api/auth';
+import { loginRequest, registerRequest, getMeRequest, updateMeRequest, oauthCompleteRequest, qxSsoRequest } from '../api/auth';
 
 const AuthContext = createContext(null);
 
@@ -66,6 +66,16 @@ export function AuthProvider({ children }) {
     return data.user;
   };
 
+  // Called from /sso/qx when a staff member opens the portal from QX: the
+  // backend checks the code with QX and answers like a normal login.
+  const completeQxLogin = async (code) => {
+    const { data } = await qxSsoRequest(code);
+    localStorage.setItem('access_token', data.access_token);
+    localStorage.setItem('refresh_token', data.refresh_token);
+    setUser(data.user);
+    return data.user;
+  };
+
   const logout = () => {
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
@@ -79,7 +89,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, updateProfile, completeOAuthLogin }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, updateProfile, completeOAuthLogin, completeQxLogin }}>
       {children}
     </AuthContext.Provider>
   );

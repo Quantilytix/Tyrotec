@@ -16,8 +16,12 @@ const payfastRoutes = require('./routes/payfastRoutes');
 const adminReviewRoutes = require('./routes/adminReviewRoutes');
 const activityLogRoutes = require('./routes/activityLogRoutes');
 const staffRoutes = require('./routes/staffRoutes');
+const supplierRoutes = require('./routes/supplierRoutes');
+const purchaseRoutes = require('./routes/purchaseRoutes');
+const stockRoutes = require('./routes/stockRoutes');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 const { startInProcessJobs } = require('./jobs/inProcessScheduler');
+const { syncSoonAfterChanges } = require('./services/qxSyncService');
 const { isEnabled } = require('./utils/envFlag');
 const { syncDbClock } = require('./utils/dbClock');
 
@@ -66,6 +70,8 @@ app.use(
   express.urlencoded({ extended: false, verify: (req, res, buf) => { req.rawBody = buf; } })
 );
 app.use(express.json());
+// Send changes to QX soon after they're made (services/qxSyncService.js).
+app.use(syncSoonAfterChanges);
 
 // API Routes
 app.use('/api/auth', authRoutes);
@@ -81,6 +87,9 @@ app.use('/api/whatsapp', whatsappRoutes);
 app.use('/api/admin/reviews', adminReviewRoutes);
 app.use('/api/activity-log', activityLogRoutes);
 app.use('/api/staff', staffRoutes);
+app.use('/api/suppliers', supplierRoutes);
+app.use('/api/purchases', purchaseRoutes);
+app.use('/api/stock', stockRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -107,6 +116,8 @@ const EXPECTED_ENV = [
   'WHATSAPP_APP_SECRET',
   'WHATSAPP_VERIFY_TOKEN',
   'GEMINI_API_KEY',
+  'QX_CONNECT_URL',
+  'QX_CONNECT_KEY',
 ];
 
 // Start Server

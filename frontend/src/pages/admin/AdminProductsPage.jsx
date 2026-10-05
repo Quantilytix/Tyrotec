@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { getProducts, createProduct, updateProduct, deleteProduct, exportProducts } from '../../api/products';
 import { formatCurrency } from '../../utils/formatters';
 import { saveBlobResponse, blobErrorMessage } from '../../utils/downloadFile';
@@ -11,7 +12,10 @@ import Card from '../../components/ui/Card';
 import ProductForm from '../../components/admin/ProductForm';
 import ProductImportModal from '../../components/admin/ProductImportModal';
 import CategoryManager from '../../components/admin/CategoryManager';
+import StockAdjustmentForm from '../../components/admin/StockAdjustmentForm';
 import useCategories from '../../hooks/useCategories';
+import { useAuth } from '../../context/AuthContext';
+import { isAdmin } from '../../utils/roles';
 
 export default function AdminProductsPage() {
   const [products, setProducts] = useState([]);
@@ -22,8 +26,10 @@ export default function AdminProductsPage() {
   const [total, setTotal] = useState(0);
   const limit = 20;
   const { categories, addCategory, removeCategory } = useCategories();
+  const { user } = useAuth();
+  const canAdjustStock = isAdmin(user?.role);
 
-  const [modalMode, setModalMode] = useState(null); // null | 'create' | 'edit' | 'import' | 'supplier' | 'categories'
+  const [modalMode, setModalMode] = useState(null); // null | 'create' | 'edit' | 'import' | 'supplier' | 'categories' | 'adjust'
   const [editingProduct, setEditingProduct] = useState(null);
   const [deleteError, setDeleteError] = useState('');
   const [exporting, setExporting] = useState(false);
@@ -60,6 +66,14 @@ export default function AdminProductsPage() {
   const openSupplier = (product) => {
     setEditingProduct(product);
     setModalMode('supplier');
+  };
+  const openAdjust = (product) => {
+    setEditingProduct(product);
+    setModalMode('adjust');
+  };
+  const handleAdjusted = () => {
+    closeModal();
+    load();
   };
   const openImport = () => setModalMode('import');
   const closeModal = () => setModalMode(null);
@@ -143,6 +157,9 @@ export default function AdminProductsPage() {
           <Button variant="secondary" onClick={() => setModalMode('categories')}>Manage categories</Button>
           <Button variant="secondary" onClick={handleExport} loading={exporting}>Export to Excel</Button>
           <Button variant="secondary" onClick={openImport}>Import from file</Button>
+          <Link to="/admin/purchases/new">
+            <Button variant="secondary">Record a purchase</Button>
+          </Link>
           <Button onClick={openCreate}>Add product</Button>
         </div>
       </div>
@@ -205,6 +222,14 @@ export default function AdminProductsPage() {
                       >
                         Edit
                       </button>
+                      {canAdjustStock && (
+                        <button
+                          onClick={() => openAdjust(product)}
+                          className="ml-3 text-xs font-medium text-teal-600 transition-colors duration-150 hover:underline"
+                        >
+                          Adjust stock
+                        </button>
+                      )}
                       <button
                         onClick={() => setConfirmingDelete(product)}
                         disabled={deletingId === product.id}
@@ -285,7 +310,7 @@ export default function AdminProductsPage() {
                 <dd className="mt-0.5 text-ink">{editingProduct.supplier_email || 'Not provided'}</dd>
               </div>
               <div>
-                <dt className="text-xs uppercase tracking-wide text-slate-500">Cost price</dt>
+                <dt className="text-xs uppercase tracking-wide text-slate-500">Average cost (from purchases)</dt>
                 <dd className="mt-0.5 text-ink">
                   {editingProduct.supplier_cost != null ? formatCurrency(editingProduct.supplier_cost) : 'Not provided'}
                 </dd>
@@ -300,6 +325,12 @@ export default function AdminProductsPage() {
               )}
             </dl>
           </div>
+        </Modal>
+      )}
+
+      {modalMode === 'adjust' && editingProduct && (
+        <Modal title="Adjust stock" onClose={closeModal}>
+          <StockAdjustmentForm product={editingProduct} onDone={handleAdjusted} onCancel={closeModal} />
         </Modal>
       )}
 

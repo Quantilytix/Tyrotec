@@ -15,6 +15,8 @@ const CUSTOMER_NAV_ITEMS = [
 
 const STAFF_NAV_ITEMS = [
   { to: '/admin/products', label: 'Products', icon: BoxIcon },
+  { to: '/admin/purchases', label: 'Purchases', icon: InboxIcon },
+  { to: '/admin/suppliers', label: 'Suppliers', icon: FactoryIcon },
   { to: '/admin/quotes', label: 'Quotes', icon: DocIcon },
   { to: '/admin/orders', label: 'Orders', icon: TruckIcon },
   { to: '/admin/payments', label: 'Payments', icon: CardIcon },
@@ -25,6 +27,7 @@ const STAFF_NAV_ITEMS = [
 ];
 
 const ADMIN_ONLY_NAV_ITEMS = [
+  { to: '/admin/opening-stock', label: 'Opening stock', icon: ClipboardIcon },
   { to: '/admin/staff', label: 'Staff', icon: StaffIcon },
   { to: '/admin/activity-log', label: 'Activity log', icon: LogIcon },
 ];
@@ -125,6 +128,30 @@ function BoxIcon(props) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" {...props}>
       <path d="M21 8l-9-5-9 5 9 5 9-5zM3 8v8l9 5 9-5V8M12 13v8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+function InboxIcon(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" {...props}>
+      <path d="M3 13l2.5-8h13L21 13v6H3v-6z" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M3 13h5l1.5 2.5h5L16 13h5M12 3v7M9.5 7.5L12 10l2.5-2.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+function FactoryIcon(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" {...props}>
+      <path d="M3 21V10l6 4V10l6 4V5h6v16H3z" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M7 18h2M12 18h2M17 18h1" strokeLinecap="round" />
+    </svg>
+  );
+}
+function ClipboardIcon(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" {...props}>
+      <path d="M9 4h6v3H9zM7 5.5H5V21h14V5.5h-2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M9 12l2 2 4-4" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }

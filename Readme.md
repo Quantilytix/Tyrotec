@@ -14,6 +14,8 @@ Tyrotec Portal is a B2B ordering platform for industrial products. Customers can
 - In-app, email, and WhatsApp notifications
 - WhatsApp product browsing, quotation, order, payment, and history flows
 - Admin products, customers, staff, orders, payments, reviews, analytics, and activity logs
+- Suppliers, purchases (goods received, with a scan-the-supplier-invoice option), stock adjustments and opening stock, with weighted-average product costs
+- QX connection: sends sales, payments, purchases and stock movements to QX's books, and lets staff sign in from QX (see [docs/qx-connection.md](docs/qx-connection.md))
 
 ## Tech stack
 
@@ -207,6 +209,8 @@ Services are reachable at `https://<service-name>.onrender.com` unless Render ad
      startCommand: node src/jobs/releaseExpiredReservations.js
    ```
 
+With the QX connection set up, add a third cron job the same way, running `node src/jobs/syncToQx.js` every 5 minutes with the Supabase and `QX_CONNECT_URL` / `QX_CONNECT_KEY` variables.
+
 Never run the in-process jobs and the cron jobs at the same time.
 
 ## Production checklist
@@ -227,6 +231,7 @@ Never run the in-process jobs and the cron jobs at the same time.
 
 - [Order and payment flow](docs/order-flow.md)
 - [Tyrotec vendor requirements](docs/tyrotec-vendor-requirements.md)
+- [QX connection](docs/qx-connection.md)
 
 ## Security notes
 

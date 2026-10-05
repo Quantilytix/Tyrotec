@@ -10,6 +10,7 @@ import AcceptStaffInvite from './pages/AcceptStaffInvite';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import AuthCallback from './pages/AuthCallback';
+import QxSsoPage from './pages/QxSsoPage';
 import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
 import ProductsPage from './pages/ProductsPage';
 import CartPage from './pages/CartPage';
@@ -32,6 +33,11 @@ import AdminAnalyticsPage from './pages/admin/AdminAnalyticsPage';
 import AdminStaffPage from './pages/admin/AdminStaffPage';
 import AdminActivityLogPage from './pages/admin/AdminActivityLogPage';
 import AdminReviewsPage from './pages/admin/AdminReviewsPage';
+import AdminSuppliersPage from './pages/admin/AdminSuppliersPage';
+import AdminPurchasesPage from './pages/admin/AdminPurchasesPage';
+import AdminNewPurchasePage from './pages/admin/AdminNewPurchasePage';
+import AdminPurchaseDetailPage from './pages/admin/AdminPurchaseDetailPage';
+import AdminOpeningStockPage from './pages/admin/AdminOpeningStockPage';
 
 import { STAFF_ROLES, isStaff } from './utils/roles';
 
@@ -56,6 +62,7 @@ export default function App() {
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
+            <Route path="/sso/qx" element={<QxSsoPage />} />
             <Route path="/privacy" element={<PrivacyPolicyPage />} />
 
             <Route
@@ -92,6 +99,10 @@ export default function App() {
               }
             >
               <Route path="/admin/products" element={<AdminProductsPage />} />
+              <Route path="/admin/suppliers" element={<AdminSuppliersPage />} />
+              <Route path="/admin/purchases" element={<AdminPurchasesPage />} />
+              <Route path="/admin/purchases/new" element={<AdminNewPurchasePage />} />
+              <Route path="/admin/purchases/:id" element={<AdminPurchaseDetailPage />} />
               <Route path="/admin/quotes" element={<AdminQuotesPage />} />
               <Route path="/admin/quotes/new" element={<AdminNewQuotePage />} />
               <Route path="/admin/quotes/:quoteId" element={<AdminQuoteDetailPage />} />
@@ -111,6 +122,7 @@ export default function App() {
                 </ProtectedRoute>
               }
             >
+              <Route path="/admin/opening-stock" element={<AdminOpeningStockPage />} />
               <Route path="/admin/staff" element={<AdminStaffPage />} />
               <Route path="/admin/activity-log" element={<AdminActivityLogPage />} />
             </Route>

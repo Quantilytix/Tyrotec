@@ -62,21 +62,30 @@ function handleImportUpload(req, res, next) {
   });
 }
 
+// Stock and cost aren't set here: stock arrives through purchases and stock
+// adjustments, and the cost is the average those purchases keep (stockService.js).
+const stockFieldsRejected = [
+  body('stock_quantity')
+    .not()
+    .exists()
+    .withMessage('Stock changes through purchases and stock adjustments, not the product form.'),
+  body('supplier_cost')
+    .not()
+    .exists()
+    .withMessage("A product's cost comes from its purchases and can't be typed in."),
+];
+
 const createProductRules = [
   body('sku').isString().notEmpty(),
   body('name').isString().notEmpty(),
   body('category').isString().notEmpty(),
   body('unit_price').isFloat({ min: 0 }),
   body('vat_applicable').optional().isBoolean(),
-  body('stock_quantity').isInt({ min: 0 }),
   body('availability').isIn(['local', 'national', 'global']),
   body('lead_time_days').isInt({ min: 0 }),
   body('min_order_qty').isInt({ min: 1 }),
-  body('supplier_name').isString().notEmpty(),
-  body('supplier_location').isString().notEmpty(),
-  body('supplier_phone').isString().notEmpty(),
-  body('supplier_email').optional({ values: 'falsy' }).isEmail(),
-  body('supplier_cost').optional({ values: 'falsy' }).isFloat({ min: 0 }),
+  body('supplier_id').isUUID().withMessage('Choose a supplier for this product.'),
+  ...stockFieldsRejected,
 ];
 
 const updateProductRules = [
@@ -85,15 +94,11 @@ const updateProductRules = [
   body('category').optional().isString().notEmpty(),
   body('unit_price').optional().isFloat({ min: 0 }),
   body('vat_applicable').optional().isBoolean(),
-  body('stock_quantity').optional().isInt({ min: 0 }),
   body('availability').optional().isIn(['local', 'national', 'global']),
   body('lead_time_days').optional().isInt({ min: 0 }),
   body('min_order_qty').optional().isInt({ min: 1 }),
-  body('supplier_name').optional().isString().notEmpty(),
-  body('supplier_location').optional().isString().notEmpty(),
-  body('supplier_phone').optional().isString().notEmpty(),
-  body('supplier_email').optional({ values: 'falsy' }).isEmail(),
-  body('supplier_cost').optional({ values: 'falsy' }).isFloat({ min: 0 }),
+  body('supplier_id').optional().isUUID().withMessage('Choose a supplier for this product.'),
+  ...stockFieldsRejected,
 ];
 
 router.post(

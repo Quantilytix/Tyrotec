@@ -15,7 +15,9 @@ function toReviewRow(row) {
     sku: row.sku || '',
     category: row.category || '',
     description: row.description || '',
-    action: row.matchedProductId ? 'restock' : 'create',
+    // Already in the catalogue -> nothing to create. Stock isn't added here:
+    // deliveries are recorded under Purchases, with their supplier and cost.
+    action: row.matchedProductId ? 'skip' : 'create',
     availability: DEFAULT_AVAILABILITY,
     lead_time_days: DEFAULT_LEAD_TIME_DAYS,
     min_order_qty: DEFAULT_MIN_ORDER_QTY,
@@ -64,7 +66,6 @@ export default function ProductImportModal({ onDone, categories = [], onCreateCa
           category: r.category,
           description: r.description,
           unit_price: Number(r.unit_price),
-          quantity: Number(r.quantity),
           availability: r.availability,
           lead_time_days: Number(r.lead_time_days),
           min_order_qty: Number(r.min_order_qty),
@@ -83,8 +84,8 @@ export default function ProductImportModal({ onDone, categories = [], onCreateCa
     return (
       <div className="space-y-4">
         <p className="text-sm text-ink">
-          {summary.restocked.length} product{summary.restocked.length === 1 ? '' : 's'} restocked,{' '}
-          {summary.created.length} new product{summary.created.length === 1 ? '' : 's'} created.
+          {summary.created.length} new product{summary.created.length === 1 ? '' : 's'} added to the catalogue, with no
+          stock yet. Record the delivery under Purchases to add stock.
         </p>
         {summary.errors.length > 0 && (
           <div className="rounded-lg bg-bad-50 px-3 py-2 text-sm text-bad-500">
@@ -109,8 +110,9 @@ export default function ProductImportModal({ onDone, categories = [], onCreateCa
     return (
       <div className="space-y-4">
         <p className="text-sm text-slate-500">
-          Upload a supplier receipt (photo, scan, or PDF) or a spreadsheet (.xlsx, .csv) of products you've
-          bought.
+          Add new products to the catalogue from a supplier price list, receipt (photo, scan, or PDF) or a
+          spreadsheet (.xlsx, .csv). This doesn't add stock: to receive a delivery, use Purchases, which can scan
+          the supplier invoice.
         </p>
         <input
           type="file"
@@ -132,7 +134,8 @@ export default function ProductImportModal({ onDone, categories = [], onCreateCa
     <div className="space-y-4">
       <p className="text-sm text-slate-500">
         Review what Gemini found, adjust anything that looks wrong, then confirm to save. Every new product
-        needs a SKU and a category.
+        needs a SKU and a category. Prices read from a supplier document are what you paid: change them to your
+        selling price (excl. VAT).
       </p>
 
       <div className="max-h-[50vh] overflow-auto rounded-lg border border-slate-200">
@@ -143,8 +146,7 @@ export default function ProductImportModal({ onDone, categories = [], onCreateCa
               <th className="px-3 py-2">Name</th>
               <th className="px-3 py-2">SKU</th>
               <th className="px-3 py-2">Category</th>
-              <th className="px-3 py-2">Unit price</th>
-              <th className="px-3 py-2">Qty</th>
+              <th className="px-3 py-2">Selling price</th>
               <th className="px-3 py-2">Availability</th>
               <th className="px-3 py-2">Lead (days)</th>
               <th className="px-3 py-2">Min order</th>
@@ -159,11 +161,10 @@ export default function ProductImportModal({ onDone, categories = [], onCreateCa
                     onChange={(e) => updateRow(i, 'action', e.target.value)}
                     className={CELL_INPUT}
                   >
-                    {row.matchedProductId && (
-                      <option value="restock">Add stock to {row.matchedProductName}</option>
-                    )}
                     <option value="create">Create new product</option>
-                    <option value="skip">Skip</option>
+                    <option value="skip">
+                      {row.matchedProductId ? `Skip (already listed as ${row.matchedProductName})` : 'Skip'}
+                    </option>
                   </select>
                 </td>
                 <td className="px-3 py-2">
@@ -178,8 +179,7 @@ export default function ProductImportModal({ onDone, categories = [], onCreateCa
                   />
                 </td>
                 <td className="px-3 py-2">
-                  {/* Only a new product needs a category; a restock keeps the
-                      one already on the matched product. */}
+                  {/* Only a new product needs a category. */}
                   {row.action === 'create' ? (
                     <CategorySelect
                       value={row.category}
@@ -200,15 +200,6 @@ export default function ProductImportModal({ onDone, categories = [], onCreateCa
                     min="0"
                     value={row.unit_price}
                     onChange={(e) => updateRow(i, 'unit_price', e.target.value)}
-                    className={CELL_INPUT}
-                  />
-                </td>
-                <td className="px-3 py-2">
-                  <input
-                    type="number"
-                    min="0"
-                    value={row.quantity}
-                    onChange={(e) => updateRow(i, 'quantity', e.target.value)}
                     className={CELL_INPUT}
                   />
                 </td>

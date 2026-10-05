@@ -1,7 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import Button from '../ui/Button';
 import CategorySelect from './CategorySelect';
 import { uploadProductImage } from '../../api/products';
+import { getSuppliers } from '../../api/suppliers';
+import { formatCurrency } from '../../utils/formatters';
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
@@ -12,15 +15,10 @@ const EMPTY = {
   vat_applicable: true,
   description: '',
   unit_price: '',
-  stock_quantity: '',
   availability: 'local',
   lead_time_days: '',
   min_order_qty: '',
-  supplier_name: '',
-  supplier_location: '',
-  supplier_email: '',
-  supplier_phone: '',
-  supplier_cost: '',
+  supplier_id: '',
 };
 
 const FIELD_CLASS =
@@ -37,18 +35,18 @@ export default function ProductForm({ initialProduct, onSubmit, onCancel, catego
           vat_applicable: initialProduct.vat_applicable !== false,
           description: initialProduct.description || '',
           unit_price: initialProduct.unit_price,
-          stock_quantity: initialProduct.stock_quantity,
           availability: initialProduct.availability,
           lead_time_days: initialProduct.lead_time_days,
           min_order_qty: initialProduct.min_order_qty,
-          supplier_name: initialProduct.supplier_name || '',
-          supplier_location: initialProduct.supplier_location || '',
-          supplier_email: initialProduct.supplier_email || '',
-          supplier_phone: initialProduct.supplier_phone || '',
-          supplier_cost: initialProduct.supplier_cost ?? '',
+          supplier_id: initialProduct.supplier_id || '',
         }
       : EMPTY
   );
+  const [suppliers, setSuppliers] = useState([]);
+
+  useEffect(() => {
+    getSuppliers().then(({ data }) => setSuppliers(data.data));
+  }, []);
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(initialProduct?.image_url || '');
   const [error, setError] = useState('');
@@ -93,16 +91,11 @@ export default function ProductForm({ initialProduct, onSubmit, onCancel, catego
         vat_applicable: form.vat_applicable,
         description: form.description || null,
         unit_price: Number(form.unit_price),
-        stock_quantity: Number(form.stock_quantity),
         availability: form.availability,
         lead_time_days: Number(form.lead_time_days),
         min_order_qty: Number(form.min_order_qty),
         image_url: imageUrl,
-        supplier_name: form.supplier_name,
-        supplier_location: form.supplier_location,
-        supplier_email: form.supplier_email || null,
-        supplier_phone: form.supplier_phone,
-        supplier_cost: form.supplier_cost === '' ? null : Number(form.supplier_cost),
+        supplier_id: form.supplier_id,
       });
     } catch (err) {
       setError(err.response?.data?.error || 'Could not save this product.');
@@ -165,16 +158,28 @@ export default function ProductForm({ initialProduct, onSubmit, onCancel, catego
             Add 15% VAT to this product
           </label>
         </div>
+        {/* Stock and cost are read-only here: stock arrives through Purchases and
+            is corrected with an adjustment, and the cost is the average those
+            purchases work out. */}
         <div>
-          <label className={LABEL_CLASS}>Stock quantity</label>
-          <input
-            required
-            type="number"
-            min="0"
-            value={form.stock_quantity}
-            onChange={update('stock_quantity')}
-            className={FIELD_CLASS}
-          />
+          <p className={LABEL_CLASS}>Stock and cost</p>
+          {initialProduct ? (
+            <div className="mt-1 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
+              <p>
+                <span className="font-medium text-ink">{initialProduct.stock_quantity}</span> in stock
+              </p>
+              <p className="mt-0.5">
+                Average cost{' '}
+                <span className="font-medium text-ink">
+                  {initialProduct.supplier_cost != null ? formatCurrency(initialProduct.supplier_cost) : 'not known yet'}
+                </span>
+              </p>
+            </div>
+          ) : (
+            <p className="mt-1 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
+              New products start with no stock. Add it by recording a purchase.
+            </p>
+          )}
         </div>
       </div>
 
@@ -212,47 +217,18 @@ export default function ProductForm({ initialProduct, onSubmit, onCancel, catego
       </div>
 
       <div>
-        <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Supplier details</p>
-        <div className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <label className={LABEL_CLASS}>Supplier name</label>
-            <input required value={form.supplier_name} onChange={update('supplier_name')} className={FIELD_CLASS} />
-          </div>
-          <div>
-            <label className={LABEL_CLASS}>Supplier location</label>
-            <input
-              required
-              value={form.supplier_location}
-              onChange={update('supplier_location')}
-              className={FIELD_CLASS}
-            />
-          </div>
-          <div>
-            <label className={LABEL_CLASS}>Supplier phone</label>
-            <input required value={form.supplier_phone} onChange={update('supplier_phone')} className={FIELD_CLASS} />
-          </div>
-          <div>
-            <label className={LABEL_CLASS}>Supplier email (optional)</label>
-            <input
-              type="email"
-              value={form.supplier_email}
-              onChange={update('supplier_email')}
-              className={FIELD_CLASS}
-            />
-          </div>
-          <div>
-            <label className={LABEL_CLASS}>Cost price (optional)</label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              value={form.supplier_cost}
-              onChange={update('supplier_cost')}
-              className={FIELD_CLASS}
-              placeholder="What we pay the supplier"
-            />
-          </div>
-        </div>
+        <label className={LABEL_CLASS}>Supplier</label>
+        <select required value={form.supplier_id} onChange={update('supplier_id')} className={FIELD_CLASS}>
+          <option value="">Choose a supplier</option>
+          {suppliers.map((supplier) => (
+            <option key={supplier.id} value={supplier.id}>
+              {supplier.name}
+            </option>
+          ))}
+        </select>
+        <Link to="/admin/suppliers" className="mt-1 inline-block text-xs text-teal-600 hover:underline">
+          Add or edit suppliers
+        </Link>
       </div>
 
       <div>

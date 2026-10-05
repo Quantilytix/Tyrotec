@@ -14,6 +14,7 @@ const {
   reviewStaffSignupAdmin,
 } = require('../controllers/authController');
 const { acceptInvite } = require('../controllers/staffController');
+const { qxSso } = require('../controllers/qxSsoController');
 const { authenticateToken, requireRole } = require('../middleware/auth');
 const validate = require('../middleware/validate');
 
@@ -63,6 +64,15 @@ router.post(
   body('access_token').isString().notEmpty(),
   validate,
   oauthComplete
+);
+// Staff opening the portal from QX: redeems QX's one-time code (see
+// controllers/qxSsoController.js). Rate-limited like the other sign-in doors.
+router.post(
+  '/qx-sso',
+  authLimiter,
+  body('code').isString().isLength({ min: 10, max: 200 }).withMessage('Missing or invalid sign-in code.'),
+  validate,
+  qxSso
 );
 router.post(
   '/forgot-password',

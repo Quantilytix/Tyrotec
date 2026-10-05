@@ -1,8 +1,10 @@
 jest.mock('../warnExpiringReservations', () => ({ run: jest.fn() }));
 jest.mock('../releaseExpiredReservations', () => ({ run: jest.fn() }));
+jest.mock('../syncToQx', () => ({ run: jest.fn() }));
 
 const warnExpiringReservations = require('../warnExpiringReservations');
 const releaseExpiredReservations = require('../releaseExpiredReservations');
+const syncToQx = require('../syncToQx');
 const { startInProcessJobs } = require('../inProcessScheduler');
 
 // Lets pending promise callbacks (the awaited job runs) settle between timer
@@ -17,6 +19,7 @@ describe('startInProcessJobs', () => {
     jest.clearAllMocks();
     warnExpiringReservations.run.mockResolvedValue();
     releaseExpiredReservations.run.mockResolvedValue();
+    syncToQx.run.mockResolvedValue();
   });
 
   afterEach(() => {
@@ -24,10 +27,11 @@ describe('startInProcessJobs', () => {
     jest.useRealTimers();
   });
 
-  it('runs nothing until the first-run delay, then warns before releasing', async () => {
+  it('runs nothing until the first-run delay, then warns, releases, and syncs to QX', async () => {
     const order = [];
     warnExpiringReservations.run.mockImplementation(async () => order.push('warn'));
     releaseExpiredReservations.run.mockImplementation(async () => order.push('release'));
+    syncToQx.run.mockImplementation(async () => order.push('qx'));
 
     stop = startInProcessJobs({ intervalMs: 60000, firstRunDelayMs: 1000 });
     jest.advanceTimersByTime(999);
@@ -36,7 +40,24 @@ describe('startInProcessJobs', () => {
 
     jest.advanceTimersByTime(1);
     await flush();
-    expect(order).toEqual(['warn', 'release']);
+    expect(order).toEqual(['warn', 'release', 'qx']);
+  });
+
+  it('still syncs to QX when a reservation job fails, and the other way round', async () => {
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
+    releaseExpiredReservations.run.mockRejectedValueOnce(new Error('supabase down'));
+    syncToQx.run.mockRejectedValueOnce(new Error('qx down'));
+
+    stop = startInProcessJobs({ intervalMs: 1000, firstRunDelayMs: 1000 });
+    jest.advanceTimersByTime(1000);
+    await flush();
+    expect(syncToQx.run).toHaveBeenCalledTimes(1);
+
+    jest.advanceTimersByTime(1000);
+    await flush();
+    expect(warnExpiringReservations.run).toHaveBeenCalledTimes(2);
+    expect(syncToQx.run).toHaveBeenCalledTimes(2);
+    consoleError.mockRestore();
   });
 
   it('repeats on every interval', async () => {

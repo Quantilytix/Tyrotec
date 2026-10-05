@@ -1,4 +1,4 @@
-// Runs the two reservation jobs inside the API process on a timer, for
+// Runs the reservation jobs and the QX sync inside the API process on a timer, for
 // hosting without scheduled jobs (Render's Free plan has no Cron Jobs).
 // Enabled by RUN_JOBS_IN_PROCESS=true in app.js.
 //
@@ -12,6 +12,7 @@
 // Postgres functions select by expiry time rather than by "since last run".
 const warnExpiringReservations = require('./warnExpiringReservations');
 const releaseExpiredReservations = require('./releaseExpiredReservations');
+const syncToQx = require('./syncToQx');
 
 const INTERVAL_MS = 5 * 60 * 1000;
 // Short delay after boot so a service waking from spin-down releases stale
@@ -32,6 +33,14 @@ function startInProcessJobs({ intervalMs = INTERVAL_MS, firstRunDelayMs = FIRST_
       await releaseExpiredReservations.run();
     } catch (err) {
       console.error('In-process reservation jobs failed:', err);
+    }
+    // After the reservation jobs, so orders they cancel go out in the same run.
+    // Separate try: a QX outage must not affect the reservation jobs, or the
+    // other way round.
+    try {
+      await syncToQx.run();
+    } catch (err) {
+      console.error('In-process QX sync failed:', err);
     } finally {
       running = false;
     }
