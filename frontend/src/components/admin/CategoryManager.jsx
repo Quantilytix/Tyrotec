@@ -15,6 +15,36 @@ export default function CategoryManager({ categories, onAdd, onRemove }) {
   const [error, setError] = useState('');
   const [confirmingId, setConfirmingId] = useState(null);
   const [removingId, setRemovingId] = useState(null);
+
+  const handleAdd = async (event) => {
+    event.preventDefault();
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    setError('');
+    setAdding(true);
+    try {
+      await onAdd(trimmed);
+      setName('');
+    } catch (err) {
+      setError(err.response?.data?.error || 'Could not add this category.');
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const handleRemove = async (category) => {
+    setError('');
+    setRemovingId(category.id);
+    try {
+      await onRemove(category.id);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Could not remove this category.');
+    } finally {
+      setRemovingId(null);
+      setConfirmingId(null);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <p className="text-sm text-slate-500">
