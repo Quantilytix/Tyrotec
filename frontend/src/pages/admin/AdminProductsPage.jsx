@@ -13,6 +13,7 @@ import ProductForm from '../../components/admin/ProductForm';
 import ProductImportModal from '../../components/admin/ProductImportModal';
 import CategoryManager from '../../components/admin/CategoryManager';
 import StockAdjustmentForm from '../../components/admin/StockAdjustmentForm';
+import ProductThumb, { ProductImageViewer } from '../../components/admin/ProductThumb';
 import useCategories from '../../hooks/useCategories';
 import { useAuth } from '../../context/AuthContext';
 import { isAdmin } from '../../utils/roles';
@@ -36,6 +37,9 @@ export default function AdminProductsPage() {
   const [exportError, setExportError] = useState('');
   const [deletingId, setDeletingId] = useState(null);
   const [confirmingDelete, setConfirmingDelete] = useState(null); // product | null
+  // Kept outside modalMode: the photo viewer is a quick look, not one of the
+  // page's editing modes, and it must be openable while nothing else is.
+  const [viewingImage, setViewingImage] = useState(null); // product | null
 
   const load = () => {
     setLoading(true);
@@ -180,7 +184,7 @@ export default function AdminProductsPage() {
       ) : (
         <>
           <Card className="mt-6 overflow-x-auto">
-            <table className="w-full min-w-[640px] text-sm">
+            <table className="w-full min-w-[720px] text-sm">
               <thead className="border-b border-slate-100 bg-slate-50 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="px-4 py-3">Product</th>
@@ -196,8 +200,13 @@ export default function AdminProductsPage() {
                 {products.map((product) => (
                   <tr key={product.id}>
                     <td className="px-4 py-3">
-                      <p className="font-medium text-ink">{product.name}</p>
-                      <p className="font-mono text-xs text-slate-400">{product.sku}</p>
+                      <div className="flex items-center gap-3">
+                        <ProductThumb product={product} onOpen={setViewingImage} />
+                        <div className="min-w-0">
+                          <p className="font-medium text-ink">{product.name}</p>
+                          <p className="font-mono text-xs text-slate-400">{product.sku}</p>
+                        </div>
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-slate-600 capitalize">{product.category}</td>
                     <td className="px-4 py-3 font-mono text-ink">{formatCurrency(product.unit_price)}</td>
@@ -333,6 +342,8 @@ export default function AdminProductsPage() {
           <StockAdjustmentForm product={editingProduct} onDone={handleAdjusted} onCancel={closeModal} />
         </Modal>
       )}
+
+      <ProductImageViewer product={viewingImage} onClose={() => setViewingImage(null)} />
 
       {confirmingDelete && (
         <ConfirmDialog
