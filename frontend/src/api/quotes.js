@@ -33,3 +33,9 @@ export const exportQuotesAdmin = ({ source, from, to } = {}) =>
 // Emails the customer their quotation with the PDF attached, from the same
 // address the portal's notifications come from. Staff only.
 export const sendQuoteEmailAdmin = (quoteId) => apiClient.post(`/quotes/${quoteId}/send-email`);
+
+// Staff placing the order for a customer who never signs in. Creates the
+// order and commits the stock, so it lands ready to take a payment. Returns
+// { orderId, orderNumber, status, stockShort }.
+export const convertQuoteToOrderAdmin = (quoteId) =>
+  apiClient.post(`/quotes/${quoteId}/admin-convert`);

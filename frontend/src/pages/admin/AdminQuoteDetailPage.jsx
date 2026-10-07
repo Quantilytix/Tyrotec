@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { sendQuoteEmailAdmin, getQuoteById, updateQuoteStatus } from '../../api/quotes';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { sendQuoteEmailAdmin, getQuoteById, updateQuoteStatus, convertQuoteToOrderAdmin } from '../../api/quotes';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { displayTotals, lineTotals, vatRateLabel } from '../../utils/vat';
 import { downloadQuotePdf } from '../../utils/generateQuotePdf';
@@ -13,6 +13,7 @@ import TotalsSummary from '../../components/ui/TotalsSummary';
 
 export default function AdminQuoteDetailPage() {
   const { quoteId } = useParams();
+  const navigate = useNavigate();
   const [quote, setQuote] = useState(null);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
@@ -21,6 +22,8 @@ export default function AdminQuoteDetailPage() {
   const [sending, setSending] = useState(false);
   const [emailedTo, setEmailedTo] = useState('');
   const [emailError, setEmailError] = useState('');
+  const [converting, setConverting] = useState(false);
+  const [showConvertConfirm, setShowConvertConfirm] = useState(false);
 
   const load = () => getQuoteById(quoteId).then(({ data }) => setQuote(data));
 
@@ -43,16 +46,32 @@ export default function AdminQuoteDetailPage() {
     }
   };
 
+  // Places the order for a customer who deals with Tyrotec by email. The
+  // order is created and its stock committed in one call, so it arrives ready
+  // to take the payment staff are usually about to record.
+  const handleConvert = async () => {
+    setError('');
+    setConverting(true);
+    try {
+      const { data } = await convertQuoteToOrderAdmin(quoteId);
+      navigate(`/admin/orders/${data.orderId}`);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Could not convert this quote.');
+      setConverting(false);
+      setShowConvertConfirm(false);
+    }
+  };
+
   if (loading) return <Spinner />;
   if (!quote) return <p className="text-sm text-slate-500">Quote not found.</p>;
 
   const canExpire = ['draft', 'submitted'].includes(quote.status);
+  const canConvert = ['draft', 'submitted'].includes(quote.status);
 
-  // Staff can no longer place this order on the customer's behalf (see
-  // convertQuoteToOrder's own comment) -- this is now how a quote actually
-  // gets to them: download the PDF and send it however staff already do
-  // (email, WhatsApp, printed for a walk-in), same document the customer's
-  // own portal generates for themselves.
+  // The PDF is how a quote reaches a customer who doesn't use the portal:
+  // staff send it however they already do (email, WhatsApp, printed for a
+  // walk-in), and it's the same document the customer's own portal would
+  // generate for them.
   // Emails the customer this quotation with the PDF attached. Reports the
   // outcome next to the button: the point of pressing it is knowing it went.
   const handleEmail = async () => {
@@ -157,8 +176,27 @@ export default function AdminQuoteDetailPage() {
               Void quote
             </Button>
           )}
+          {canConvert && (
+            <Button onClick={() => setShowConvertConfirm(true)} loading={converting}>
+              Convert to order
+            </Button>
+          )}
         </div>
       </Card>
+
+      {showConvertConfirm && (
+        <ConfirmDialog
+          title="Place this order for the customer?"
+          message={`Quote #${quote.quote_number} becomes an order and the stock is set aside for ${
+            quote.users?.company_name || quote.users?.email || 'this customer'
+          }. You can then record their payment on the order. If stock is short it will wait for approval instead.`}
+          confirmLabel="Convert to order"
+          danger={false}
+          onConfirm={handleConvert}
+          onCancel={() => setShowConvertConfirm(false)}
+          loading={converting}
+        />
+      )}
 
       {showVoidConfirm && (
         <ConfirmDialog

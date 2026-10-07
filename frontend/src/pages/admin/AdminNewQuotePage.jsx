@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { getAllCustomersAdmin, createCustomerAdmin } from '../../api/customers';
 import { getProducts } from '../../api/products';
-import { createQuoteForCustomerAdmin, sendQuoteEmailAdmin } from '../../api/quotes';
+import { createQuoteForCustomerAdmin, sendQuoteEmailAdmin, convertQuoteToOrderAdmin } from '../../api/quotes';
 import { downloadQuotePdf } from '../../utils/generateQuotePdf';
 import { formatCurrency } from '../../utils/formatters';
 import { documentTotals, lineTotals, rateForProduct, vatRateLabel } from '../../utils/vat';
@@ -28,6 +28,7 @@ export default function AdminNewQuotePage() {
   const [newCustomer, setNewCustomer] = useState({ email: '', company_name: '', full_name: '', phone: '' });
   const [creatingCustomer, setCreatingCustomer] = useState(false);
   const [customerError, setCustomerError] = useState('');
+  const [existingCustomer, setExistingCustomer] = useState(null);
 
   const [productQuery, setProductQuery] = useState('');
   const [productResults, setProductResults] = useState([]);
@@ -88,10 +89,31 @@ export default function AdminNewQuotePage() {
       setShowNewCustomerForm(false);
       setNewCustomer({ email: '', company_name: '', full_name: '', phone: '' });
     } catch (err) {
-      setCustomerError(err.response?.data?.error || 'Could not create this customer.');
+      const message = err.response?.data?.error || 'Could not create this customer.';
+      setCustomerError(message);
+      // The email is already on the system -- almost always the same business
+      // registering themselves earlier. Look them up so staff can carry on in
+      // one click instead of backing out to search by hand.
+      if (/already exists/i.test(message)) {
+        try {
+          const { data } = await getAllCustomersAdmin({ search: newCustomer.email.trim(), limit: 1 });
+          setExistingCustomer(data.data?.[0] || null);
+        } catch {
+          setExistingCustomer(null);
+        }
+      }
     } finally {
       setCreatingCustomer(false);
     }
+  };
+
+  // Accepts the account the duplicate-email lookup found.
+  const useExistingCustomer = () => {
+    setSelectedCustomer(existingCustomer);
+    setExistingCustomer(null);
+    setCustomerError('');
+    setShowNewCustomerForm(false);
+    setNewCustomer({ email: '', company_name: '', full_name: '', phone: '' });
   };
 
   const addItem = (product) => {
@@ -165,6 +187,10 @@ export default function AdminNewQuotePage() {
           onEmail={handleEmailCreated}
           onDownload={handleDownloadCreated}
           onView={() => navigate(`/admin/quotes/${created.quoteId}`)}
+          onConvert={async () => {
+            const { data } = await convertQuoteToOrderAdmin(created.quoteId);
+            navigate(`/admin/orders/${data.orderId}`);
+          }}
           onClose={() => navigate('/admin/quotes')}
         />
       </Modal>
@@ -229,6 +255,23 @@ export default function AdminNewQuotePage() {
               className={SEARCH_INPUT_CLASS}
             />
             {customerError && <p className="text-sm text-bad-500">{customerError}</p>}
+            {existingCustomer && (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
+                <p className="text-slate-600">
+                  <span className="font-medium text-ink">
+                    {existingCustomer.company_name || existingCustomer.email}
+                  </span>{' '}
+                  already has an account.
+                </p>
+                <button
+                  type="button"
+                  onClick={useExistingCustomer}
+                  className="mt-1 text-xs font-medium text-teal-600 transition-colors duration-150 hover:underline"
+                >
+                  Use this customer instead
+                </button>
+              </div>
+            )}
             <div className="flex items-center gap-3">
               <Button onClick={handleCreateCustomer} loading={creatingCustomer}>
                 Create customer
@@ -237,6 +280,7 @@ export default function AdminNewQuotePage() {
                 onClick={() => {
                   setShowNewCustomerForm(false);
                   setCustomerError('');
+                  setExistingCustomer(null);
                 }}
                 className="text-xs font-medium text-slate-500 transition-colors duration-150 hover:underline"
               >

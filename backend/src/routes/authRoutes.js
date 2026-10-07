@@ -56,7 +56,21 @@ const authLimiter = rateLimit({
   message: { error: 'Too many attempts. Please wait a few minutes and try again.' },
 });
 
-router.post('/register', authLimiter, registerRules, validate, register);
+// Signing up is a once-in-an-account's-life action, so it gets a far tighter
+// ceiling than signing in. Registering is also the only endpoint that reveals
+// whether an address is already in use (login and forgot-password both answer
+// the same either way), so this is what stops that answer being used to
+// harvest the customer list -- roughly 20 addresses an hour per IP instead of
+// 80, at no cost to anyone who registers once.
+const registerLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many sign-up attempts. Please wait a few minutes and try again.' },
+});
+
+router.post('/register', registerLimiter, registerRules, validate, register);
 router.post('/login', authLimiter, emailPasswordRules, validate, login);
 router.post(
   '/oauth-complete',

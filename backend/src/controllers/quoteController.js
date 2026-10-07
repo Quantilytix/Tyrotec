@@ -234,7 +234,7 @@ const convertQuoteToOrder = asyncHandler(async (req, res) => {
     action: 'quote.converted',
     entityType: 'order',
     entityId: result.orderId,
-    description: `${customerLabel}'s quote #${result.quoteNumber} was converted to order #${result.orderId} via the customer portal.`,
+    description: `${customerLabel}'s quote #${result.quoteNumber} was converted to order #${result.orderNumber} via the customer portal.`,
   });
 
   return res.status(201).json({ message: 'Order created successfully', ...result });
@@ -333,6 +333,93 @@ const checkoutQuoteFast = asyncHandler(async (req, res) => {
   });
 });
 
+// Staff only: turn a customer's quote into an order on their behalf.
+//
+// This is the middle of the "customer never logs in" flow -- they email asking
+// for a price, staff build and send the quote, the customer EFTs the money,
+// and staff finish the job here. Without it the chain breaks exactly halfway:
+// the quote exists and the money has arrived, but only the customer could
+// turn one into the other.
+//
+// The order is created and approved in one action. Converting alone leaves it
+// in 'pending_approval', which can't take a payment, and asking staff to then
+// approve an order they just created themselves is ceremony, not control. So
+// the stock is committed here and the order lands in 'approved' -- shown as
+// "Awaiting payment" -- which recordStaffPayment already accepts.
+//
+// If stock is short, approve_order refuses rather than overselling. The order
+// stays at 'pending_approval' with a stock_short review, exactly as an
+// under-stocked customer checkout does, and staff decide what to supply.
+const convertQuoteToOrderAdmin = asyncHandler(async (req, res) => {
+  const { quoteId } = req.params;
+
+  const { data: quote, error: quoteErr } = await supabase
+    .from('quotes')
+    .select('id, quote_number, customer_id, total_amount, users(email, company_name)')
+    .eq('id', quoteId)
+    .single();
+  if (quoteErr || !quote) return res.status(404).json({ error: 'Quote not found.' });
+
+  const customerLabel = quote.users?.company_name || quote.users?.email || 'Customer';
+  const staffLabel = req.user.company_name || req.user.email;
+
+  // 'admin' marks where the order came from, so exports and the activity log
+  // distinguish a staff-placed order from one the customer placed themselves.
+  const result = await convertQuoteForCustomer(quote.customer_id, customerLabel, quoteId, 'admin');
+  if (result.error) return res.status(result.status).json({ error: result.error });
+
+  let status = 'pending_approval';
+  let stockShort = false;
+
+  const { error: approveErr } = await supabase.rpc('approve_order', { p_order_id: result.orderId });
+  if (approveErr) {
+    stockShort = true;
+    await flagStockShort(result.orderId);
+  } else {
+    status = 'approved';
+    // Same flags a customer's own checkout raises: high value, first order.
+    const { data: order } = await supabase
+      .from('orders')
+      .select('subtotal_amount, vat_amount, total_amount')
+      .eq('id', result.orderId)
+      .single();
+    if (order) {
+      await flagIfNeeded(result.orderId, quote.customer_id, displayTotals(order).subtotal_amount);
+    }
+  }
+
+  await logActivity({
+    actorId: req.user.id,
+    actorRole: req.user.role,
+    actorLabel: staffLabel,
+    action: 'quote.converted',
+    entityType: 'order',
+    entityId: result.orderId,
+    description: stockShort
+      ? `${staffLabel} converted ${customerLabel}'s quote #${quote.quote_number} to order #${result.orderNumber}, which needs approval: not enough stock.`
+      : `${staffLabel} converted ${customerLabel}'s quote #${quote.quote_number} to order #${result.orderNumber} (${formatCurrency(quote.total_amount)}) on the customer's behalf; awaiting payment.`,
+  });
+
+  await notifyUser({
+    userId: quote.customer_id,
+    type: 'order_status_changed',
+    title: 'Your order has been placed',
+    message: `We've turned your quote #${quote.quote_number} into order #${result.orderNumber}. We'll confirm as soon as your payment reflects.`,
+    relatedType: 'order',
+    relatedId: result.orderId,
+    email: quote.users?.email,
+  });
+
+  return res.status(201).json({
+    ...result,
+    status,
+    stockShort,
+    message: stockShort
+      ? 'Order created, but there is not enough stock. It needs approval before it can be paid.'
+      : 'Order created and awaiting payment.',
+  });
+});
+
 module.exports = {
   createQuote,
   createQuoteForCustomerAdmin,
@@ -343,5 +430,6 @@ module.exports = {
   getQuoteById,
   updateQuoteStatus,
   convertQuoteToOrder,
+  convertQuoteToOrderAdmin,
   checkoutQuoteFast,
 };

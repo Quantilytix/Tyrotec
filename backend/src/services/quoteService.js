@@ -124,7 +124,8 @@ async function convertQuoteForCustomer(customerId, customerLabel, quoteId, sourc
     relatedId: order.id,
   });
 
-  return { orderId: order.id, quoteNumber: quote.quote_number };
+  // order_number is the human-facing reference; callers log and display it.
+  return { orderId: order.id, orderNumber: order.order_number, quoteNumber: quote.quote_number };
 }
 
 module.exports = { createQuoteForCustomer, convertQuoteForCustomer };

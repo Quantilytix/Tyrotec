@@ -16,6 +16,9 @@ export default function Register() {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  // The backend sets `recoverable` when the address already has an account,
+  // which is a signpost rather than a failure -- it earns a link, not just text.
+  const [recoverable, setRecoverable] = useState(false);
   const [loading, setLoading] = useState(false);
   const [pendingMessage, setPendingMessage] = useState('');
 
@@ -25,6 +28,7 @@ export default function Register() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setRecoverable(false);
     setLoading(true);
     try {
       const result = await register(
@@ -44,6 +48,7 @@ export default function Register() {
       }
     } catch (err) {
       setError(err.response?.data?.error || 'Something went wrong. Try again.');
+      setRecoverable(Boolean(err.response?.data?.recoverable));
     } finally {
       setLoading(false);
     }
@@ -146,7 +151,17 @@ export default function Register() {
               </div>
 
               {error && (
-                <p className="rounded-lg bg-bad-50 px-3 py-2 text-sm text-bad-500">{error}</p>
+                <div className="rounded-lg bg-bad-50 px-3 py-2 text-sm text-bad-500">
+                  <p>{error}</p>
+                  {recoverable && (
+                    <Link
+                      to="/forgot-password"
+                      className="mt-1 inline-block font-medium text-teal-600 hover:underline"
+                    >
+                      Set a password for this email
+                    </Link>
+                  )}
+                </div>
               )}
 
               <Button type="submit" loading={loading} className="w-full">

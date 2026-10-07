@@ -49,7 +49,21 @@ const register = asyncHandler(async (req, res) => {
     user_metadata: { company_name: company_name || null, full_name: full_name || null, role: 'customer' },
   });
 
-  if (error) return res.status(400).json({ error: error.message });
+  if (error) {
+    // Supabase answers an already-registered address with a bare "A user with
+    // this email address has already been registered", which is true but a
+    // dead end -- especially for the customers staff create by hand, who have
+    // a real, confirmed account they have simply never set a password on.
+    // Point them at the one thing that actually works, the same way the phone
+    // collision above does.
+    if (error.status === 422 || /already been registered/i.test(error.message || '')) {
+      return res.status(400).json({
+        error: "That email already has an account. Use \"Forgot password?\" to set a password and sign in.",
+        recoverable: true,
+      });
+    }
+    return res.status(400).json({ error: error.message });
+  }
 
   // A DB trigger normally creates this row from the auth user's metadata,
   // but relying on it alone is a race: if this SELECT runs before the

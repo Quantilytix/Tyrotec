@@ -11,6 +11,7 @@ const {
   getQuoteById,
   updateQuoteStatus,
   convertQuoteToOrder,
+  convertQuoteToOrderAdmin,
   checkoutQuoteFast,
 } = require('../controllers/quoteController');
 const { authenticateToken, requireRole } = require('../middleware/auth');
@@ -53,6 +54,15 @@ router.patch(
 // Customer only -- staff can no longer convert a quote to an order on a
 // customer's behalf (see convertQuoteToOrder's own comment for why).
 router.post('/:quoteId/convert', authenticateToken, requireRole(['customer']), convertQuoteToOrder);
+// Staff placing an order for a customer who deals with Tyrotec by email and
+// never signs in. A distinct path from the customer's own convert above, so
+// neither has to branch on who is calling.
+router.post(
+  '/:quoteId/admin-convert',
+  authenticateToken,
+  requireRole(['admin', 'sales_rep']),
+  convertQuoteToOrderAdmin
+);
 router.post('/:quoteId/checkout', authenticateToken, checkoutQuoteFast);
 
 module.exports = router;
