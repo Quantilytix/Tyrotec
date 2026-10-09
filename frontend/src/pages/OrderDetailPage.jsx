@@ -213,8 +213,8 @@ export default function OrderDetailPage() {
       <Card className="mt-6 flex flex-col gap-4 p-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <TotalsSummary totals={displayTotals(order)} className="text-left" />
         <div className="flex items-center gap-3">
-          {latestPayment?.status === 'rejected' && !activePayment && (
-            <StatusBadge status="payment_rejected" />
+          {['rejected', 'cancelled'].includes(latestPayment?.status) && !activePayment && (
+            <StatusBadge status={`payment_${latestPayment.status}`} />
           )}
           {activePayment && <StatusBadge status={`payment_${activePayment.status}`} />}
           {hasReceipt && (

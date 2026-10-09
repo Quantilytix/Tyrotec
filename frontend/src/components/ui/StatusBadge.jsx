@@ -23,6 +23,7 @@ const STYLES = {
   payment_submitted: 'bg-amber-50 text-amber-600',
   payment_approved: 'bg-good-50 text-good-500',
   payment_rejected: 'bg-bad-50 text-bad-500',
+  payment_cancelled: 'bg-bad-50 text-bad-500',
 };
 
 const DOT_STYLES = {
@@ -41,6 +42,7 @@ const DOT_STYLES = {
   payment_submitted: 'bg-amber-500',
   payment_approved: 'bg-good-500',
   payment_rejected: 'bg-bad-500',
+  payment_cancelled: 'bg-bad-500',
 };
 
 export default function StatusBadge({ status }) {

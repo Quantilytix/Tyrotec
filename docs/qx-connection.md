@@ -71,7 +71,7 @@ A QX platform admin rotates the connection's key in QX. The old key stops workin
 
 - **Changes reach QX about 15 seconds after they're made.** Every change goes through the API, which keeps a Free-plan service awake for at least 15 minutes, so new changes aren't held up by sleep. Only retries of rejected records wait for the API to be awake.
 - **QX invoices are dated the day the order became a sale** (`orders.committed_at`, set when it's first approved, paid or confirmed), not the day it was placed.
-- **QX never rewrites a posted invoice, payment or purchase on its own.** An order cancelled after its invoice was created, a reversed payment, or an edited purchase shows up in QX as a "needs attention" item. For orders and payments, QX's admin can **Reverse in QX** from there; purchases are corrected by hand.
+- **QX never rewrites a posted invoice, payment or purchase on its own.** An order cancelled after its invoice was created, a reversed payment, or an edited purchase shows up in QX as a "needs attention" item. For orders and payments, QX's admin can **Reverse in QX** from there; purchases are corrected by hand. Cancelling an order in the portal also marks its payment `cancelled` (`036`), so QX never counts a cancelled order as paid.
 - **Every call to Supabase gives up after 30 seconds** (`config/supabase.js`), so a stalled connection returns an error instead of leaving a request waiting for ever.
 - **Average cost is kept to the cent.** Each sale or write-off is costed at the rounded average, so QX's Inventory account and the portal's stock value (quantity × average cost) can differ by a few cents. A small adjustment in QX clears it.
 

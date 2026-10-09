@@ -131,7 +131,9 @@ export default function AdminOrderDetailPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {latestPayment?.status === 'rejected' && !activePayment && <StatusBadge status="payment_rejected" />}
+          {['rejected', 'cancelled'].includes(latestPayment?.status) && !activePayment && (
+            <StatusBadge status={`payment_${latestPayment.status}`} />
+          )}
           {activePayment && <StatusBadge status={`payment_${activePayment.status}`} />}
           <StatusBadge status={order.status} />
         </div>
@@ -211,7 +213,11 @@ export default function AdminOrderDetailPage() {
       {showCancelConfirm && (
         <ConfirmDialog
           title="Cancel this order?"
-          message={`Order #${order.order_number} will be cancelled and any reserved/decremented stock will be restored. This can't be undone.`}
+          message={
+            activePayment
+              ? `Order #${order.order_number} will be cancelled, its payment marked cancelled (not paid) and any reserved/decremented stock restored. Refund the customer separately. This can't be undone.`
+              : `Order #${order.order_number} will be cancelled and any reserved/decremented stock will be restored. This can't be undone.`
+          }
           confirmLabel="Cancel order"
           onConfirm={() => applyStatusUpdate('cancelled')}
           onCancel={() => setShowCancelConfirm(false)}

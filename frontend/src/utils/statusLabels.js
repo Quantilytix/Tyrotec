@@ -35,6 +35,7 @@ export const STATUS_LABELS = {
   payment_submitted: 'Payment submitted',
   payment_approved: 'Payment approved',
   payment_rejected: 'Payment rejected',
+  payment_cancelled: 'Payment cancelled',
 };
 
 export function statusLabel(status) {
