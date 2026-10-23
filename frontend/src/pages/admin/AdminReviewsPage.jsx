@@ -38,6 +38,7 @@ export default function AdminReviewsPage() {
   const [actingId, setActingId] = useState(null);
   const [error, setError] = useState('');
   const [pendingConfirm, setPendingConfirm] = useState(null); // { reviewId, action, label } | null
+  const [oldestFirst, setOldestFirst] = useState(false);
   const navigate = useNavigate();
 
   const load = () => getPendingReviews().then(({ data }) => setReviews(data));
@@ -71,12 +72,34 @@ export default function AdminReviewsPage() {
     handleResolve(review.id, action);
   };
 
+  // Newest first, so what just came in is at the top; oldest first for
+  // working through a backlog in the order it arrived.
+  const sorted = [...reviews].sort((a, b) =>
+    oldestFirst
+      ? new Date(a.created_at) - new Date(b.created_at)
+      : new Date(b.created_at) - new Date(a.created_at)
+  );
+
   return (
     <div>
-      <h1 className="font-display text-xl font-semibold text-ink">Review queue</h1>
-      <p className="mt-1 text-sm text-slate-500">
-        Orders the automated checkout couldn't fully handle on its own. Worked independently, one at a time.
-      </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="font-display text-xl font-semibold text-ink">Review queue</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Orders the automated checkout couldn't fully handle on its own. Worked independently, one at a time.
+          </p>
+        </div>
+        {reviews.length > 1 && (
+          <button
+            type="button"
+            onClick={() => setOldestFirst((v) => !v)}
+            aria-pressed={oldestFirst}
+            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-ink transition-colors duration-150 hover:bg-slate-50"
+          >
+            {oldestFirst ? 'Oldest first' : 'Newest first'} ⇅
+          </button>
+        )}
+      </div>
 
       {error && <p className="mt-4 rounded-lg bg-bad-50 px-3 py-2 text-sm text-bad-500">{error}</p>}
 
@@ -88,7 +111,7 @@ export default function AdminReviewsPage() {
         </div>
       ) : (
         <div className="mt-6 space-y-4">
-          {reviews.map((review) => (
+          {sorted.map((review) => (
             <Card key={review.id} className="p-4">
               <div className="flex items-center justify-between">
                 <div>

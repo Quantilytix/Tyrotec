@@ -2,6 +2,7 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { formatCurrency } from './formatters';
 import { documentTotals, lineTotals, vatRateLabel } from './vat';
+import { discountLabel } from './discounts';
 import {
   COMPANY,
   INK,
@@ -164,7 +165,11 @@ export async function downloadQuotePdf({ items, totals, customer, quoteNumber, s
     startY: Math.max(leftPanelY, rightPanelY) + 6,
     head: [['Product', 'SKU', 'Unit Price', 'Qty', 'VAT', 'Line Total']],
     body: items.map((item) => [
-      item.name,
+      // A discounted line says so under the name, with the original price.
+      item.discount_percent
+        ? `${item.name}
+${discountLabel(item.discount_percent, item.discount_reason)} (was ${formatCurrency(item.list_price)})`
+        : item.name,
       item.sku,
       formatCurrency(item.unit_price),
       String(item.quantity),

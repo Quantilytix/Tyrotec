@@ -47,12 +47,12 @@ const LOADERS = {
   product: { table: 'products', select: '*', build: (row) => records.productRecord(row) },
   quote: {
     table: 'quotes',
-    select: '*, quote_items(product_id, quantity, unit_price, vat_rate, product:products(sku, name))',
+    select: '*, quote_items(product_id, quantity, unit_price, vat_rate, list_price, discount_percent, discount_reason, product:products(sku, name))',
     build: (row) => records.quoteRecord(row),
   },
   order: {
     table: 'orders',
-    select: '*, order_items(product_id, quantity, unit_price, vat_rate, product:products(sku, name))',
+    select: '*, order_items(product_id, quantity, unit_price, vat_rate, list_price, discount_percent, discount_reason, product:products(sku, name))',
     build: (row) => records.orderRecord(row),
   },
   payment: { table: 'payments', select: '*', build: (row) => records.paymentRecord(row) },

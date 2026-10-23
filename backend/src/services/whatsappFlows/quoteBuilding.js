@@ -2,6 +2,7 @@ const supabase = require('../../config/supabase');
 const { sendText, sendButtons } = require('../../config/whatsapp');
 const { formatCurrency } = require('../../utils/formatCurrency');
 const { documentTotals, rateForProduct } = require('../../utils/vat');
+const { availabilityNote } = require('../../utils/availability');
 const { createQuoteForCustomer } = require('../quoteService');
 
 const REVIEW_BUTTONS = [
@@ -56,9 +57,11 @@ async function handle(conversation, message) {
       await sendText(phone, 'Please reply with a quantity (a whole number of at least 1).');
       return { newState: 'quote_awaiting_quantity', newContext: context };
     }
-    if (quantity > product.stock_quantity) {
-      await sendText(phone, `Only ${product.stock_quantity} of ${product.name} available. Please enter a smaller quantity.`);
-      return { newState: 'quote_awaiting_quantity', newContext: context };
+    // More than is in stock is allowed: an order for it waits until the
+    // stock arrives. Just say so before showing the quote.
+    const note = availabilityNote(product.stock_quantity, quantity, product.lead_time_days);
+    if (note) {
+      await sendText(phone, `${product.name}: ${note} You can still add it; if you order, we'll let you know when it arrives and you pay then.`);
     }
 
     const items = addItem(context.items || [], product, quantity);

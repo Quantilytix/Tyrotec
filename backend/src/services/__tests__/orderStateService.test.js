@@ -1,19 +1,17 @@
 // Chainable mock matching the two query shapes orderStateService.js uses:
 //   supabase.from('orders').select(...).eq(...).single()
-//   supabase.from('orders').update(...).eq(...).select().single()
+//   supabase.from('orders').update(...).eq(...).eq(...).select().maybeSingle()
 function makeSupabaseMock({ selectResult, updateResult }) {
   const builder = {
     select: jest.fn(() => builder),
     update: jest.fn(() => builder),
     eq: jest.fn(() => builder),
     single: jest.fn(),
+    maybeSingle: jest.fn(),
   };
-  // First .single() call (after select) resolves the find; second (after
-  // update) resolves the update -- matches the two sequential calls
-  // transitionOrderStatus makes against the same mocked builder.
-  builder.single
-    .mockResolvedValueOnce(selectResult)
-    .mockResolvedValueOnce(updateResult);
+  // .single() resolves the find, .maybeSingle() the conditional update.
+  builder.single.mockResolvedValueOnce(selectResult);
+  builder.maybeSingle.mockResolvedValueOnce(updateResult);
   return { from: jest.fn(() => builder), _builder: builder };
 }
 
@@ -45,7 +43,7 @@ describe('orderStateService', () => {
     it('matches the documented manual-approval chain', () => {
       const { allowedNextStatuses } = require('../orderStateService');
       expect(allowedNextStatuses('pending_approval')).toEqual(['approved', 'cancelled']);
-      expect(allowedNextStatuses('approved')).toEqual(['confirmed', 'processing', 'cancelled']);
+      expect(allowedNextStatuses('approved')).toEqual(['confirmed', 'processing', 'awaiting_payment', 'cancelled']);
       expect(allowedNextStatuses('processing')).toEqual(['completed', 'cancelled']);
     });
 
@@ -136,6 +134,21 @@ describe('orderStateService', () => {
       expect(mock._builder.update).toHaveBeenCalledWith(
         expect.objectContaining({ status: 'processing' })
       );
+      // Only while the order is still in the status that was checked.
+      expect(mock._builder.eq).toHaveBeenCalledWith('status', 'approved');
+    });
+
+    it('refuses when the order changed status between the check and the update', async () => {
+      const mock = makeSupabaseMock({
+        selectResult: { data: { id: 'o1', status: 'stock_reserved' }, error: null },
+        updateResult: { data: null, error: null },
+      });
+      jest.doMock('../../config/supabase', () => mock);
+      const { transitionOrderStatus } = require('../orderStateService');
+
+      const result = await transitionOrderStatus('o1', 'confirmed');
+
+      expect(result.status).toBe(409);
     });
 
     it('throws if the update itself fails at the database level', async () => {

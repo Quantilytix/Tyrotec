@@ -11,6 +11,8 @@ const { logForUser } = require('../services/activityLogService');
 const { formatCurrency } = require('../utils/formatCurrency');
 const { isStaff } = require('../utils/roles');
 const { publicProductView } = require('../services/stockService');
+const { productDiscount, discountedPrice, saToday } = require('../utils/discounts');
+const { clearExpiredDiscounts } = require('../services/discountService');
 
 const PRODUCT_IMAGES_BUCKET = 'Product Images';
 
@@ -121,8 +123,15 @@ async function withSupplierCopies(fields) {
 }
 
 // Customers get the catalogue view only: never supplier details or costs.
-function viewFor(user, product) {
-  return isStaff(user?.role) ? product : publicProductView(product);
+// Everyone gets `discount`: the product's current discount and the price
+// after it, or null (038).
+function viewFor(user, product, today = saToday()) {
+  const view = isStaff(user?.role) ? product : publicProductView(product);
+  const discount = productDiscount(product, today);
+  return {
+    ...view,
+    discount: discount ? { ...discount, price: discountedPrice(product.unit_price, discount.percent) } : null,
+  };
 }
 
 // Admin/sales_rep only. Takes one multipart file (see the `upload` multer
@@ -156,7 +165,7 @@ const uploadProductImage = asyncHandler(async (req, res) => {
 // unit_price and stock_quantity are always included so customers can see
 // price and availability up front.
 const getAllProducts = asyncHandler(async (req, res) => {
-  const { search, category, page = 1, limit = 20 } = req.query;
+  const { search, category, discounted, page = 1, limit = 20 } = req.query;
   const pageNum = Math.max(parseInt(page, 10) || 1, 1);
   const limitNum = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
   const from = (pageNum - 1) * limitNum;
@@ -179,11 +188,18 @@ const getAllProducts = asyncHandler(async (req, res) => {
   if (category) {
     query = query.eq('category', category);
   }
+  // "On discount": products with a current discount. Ones past their last
+  // day are cleared first so they don't fill the list.
+  if (discounted === 'true') {
+    await clearExpiredDiscounts();
+    query = query.not('discount_id', 'is', null);
+  }
 
   const { data, error, count } = await query;
   if (error) throw error;
 
-  return res.json({ data: (data || []).map((product) => viewFor(req.user, product)), page: pageNum, limit: limitNum, total: count });
+  const today = saToday();
+  return res.json({ data: (data || []).map((product) => viewFor(req.user, product, today)), page: pageNum, limit: limitNum, total: count });
 });
 
 // Admin/sales_rep only. The same search and category filters as the product
@@ -337,4 +353,5 @@ module.exports = {
   deleteProduct,
   uploadProductImage,
   notifyIfLowStockCrossing,
+  withSupplierCopies,
 };

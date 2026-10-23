@@ -34,6 +34,7 @@ import AdminStaffPage from './pages/admin/AdminStaffPage';
 import AdminActivityLogPage from './pages/admin/AdminActivityLogPage';
 import AdminReviewsPage from './pages/admin/AdminReviewsPage';
 import AdminSuppliersPage from './pages/admin/AdminSuppliersPage';
+import AdminDiscountsPage from './pages/admin/AdminDiscountsPage';
 import AdminPurchasesPage from './pages/admin/AdminPurchasesPage';
 import AdminNewPurchasePage from './pages/admin/AdminNewPurchasePage';
 import AdminPurchaseDetailPage from './pages/admin/AdminPurchaseDetailPage';
@@ -123,6 +124,7 @@ export default function App() {
               }
             >
               <Route path="/admin/opening-stock" element={<AdminOpeningStockPage />} />
+              <Route path="/admin/discounts" element={<AdminDiscountsPage />} />
               <Route path="/admin/staff" element={<AdminStaffPage />} />
               <Route path="/admin/activity-log" element={<AdminActivityLogPage />} />
             </Route>

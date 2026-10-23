@@ -2,6 +2,8 @@ const supabase = require('../config/supabase');
 const { notifyInternalTeam } = require('./notificationService');
 const { formatCurrency } = require('../utils/formatCurrency');
 const { documentTotals, rateForProduct } = require('../utils/vat');
+const { pricedLine, saToday } = require('../utils/discounts');
+const { checkQuoteDiscounts } = require('./discountService');
 
 // Core logic behind creating a quote, shared by the portal's POST /quotes
 // route and the WhatsApp quoteBuilding flow -- two front doors onto the same
@@ -15,7 +17,7 @@ async function createQuoteForCustomer(customerId, customerLabel, items, source =
   const productIds = items.map((i) => i.product_id);
   const { data: products, error: pErr } = await supabase
     .from('products')
-    .select('id, unit_price, vat_applicable')
+    .select('id, unit_price, vat_applicable, discount_id, discount_percent, discount_reason, discount_ends_on')
     .in('id', productIds);
 
   if (pErr) throw pErr;
@@ -28,12 +30,15 @@ async function createQuoteForCustomer(customerId, customerLabel, items, source =
   // Prices are excl VAT, and the rate comes from the product, never from the
   // request -- a client can't talk the server out of charging VAT. The rate is
   // stored on the line so the document always states what it actually charged.
+  // Likewise a discount: the product's current one, if any, priced here
+  // (038), with the original price and reason kept on the line.
+  const today = saToday();
   const quoteItemsData = items.map((item) => {
     const product = productMap.get(item.product_id);
     return {
       product_id: item.product_id,
       quantity: item.quantity,
-      unit_price: product.unit_price,
+      ...pricedLine(product, today),
       vat_rate: rateForProduct(product),
     };
   });
@@ -81,6 +86,8 @@ async function convertQuoteForCustomer(customerId, customerLabel, quoteId, sourc
   if (qErr || !quote) return { error: 'Quote not found.', status: 404 };
   if (quote.status === 'converted') return { error: 'Quote already converted', status: 400 };
   if (quote.status === 'expired') return { error: 'Quote has expired', status: 400 };
+  const discountProblem = await checkQuoteDiscounts(quote.id);
+  if (discountProblem) return discountProblem;
 
   // Carries the quote's own figures across rather than recalculating: an
   // order must charge what the customer was quoted, even if a product's price

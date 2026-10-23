@@ -13,6 +13,7 @@ const {
   convertQuoteToOrder,
   convertQuoteToOrderAdmin,
   checkoutQuoteFast,
+  refreshQuote,
 } = require('../controllers/quoteController');
 const { authenticateToken, requireRole } = require('../middleware/auth');
 const validate = require('../middleware/validate');
@@ -64,5 +65,7 @@ router.post(
   convertQuoteToOrderAdmin
 );
 router.post('/:quoteId/checkout', authenticateToken, checkoutQuoteFast);
+// Same products at today's prices, replacing a quote that can't be accepted.
+router.post('/:quoteId/refresh', authenticateToken, refreshQuote);
 
 module.exports = router;

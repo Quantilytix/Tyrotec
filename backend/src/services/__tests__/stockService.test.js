@@ -28,6 +28,30 @@ describe('publicProductView', () => {
   });
 });
 
+describe('validatePurchaseInput: new products', () => {
+  const NEW = { sku: ' NV-1 ', name: ' New Valve ', category: 'Valves', unit_price: '1499.999', lead_time_days: 5 };
+
+  it('accepts a line for a product that is not in the catalogue yet', () => {
+    const { value, error } = validatePurchaseInput({ ...PURCHASE, lines: [{ new_product: NEW, quantity: 3, unit_cost: 800 }] });
+    expect(error).toBeUndefined();
+    expect(value.lines).toEqual([{
+      quantity: 3, unit_cost: 800, vat_rate: 15,
+      new_product: { sku: 'NV-1', name: 'New Valve', category: 'Valves', unit_price: 1500, lead_time_days: 5 },
+    }]);
+  });
+
+  it.each([
+    [{ sku: '' }, "Line 1: enter the new product's SKU."],
+    [{ name: '' }, "Line 1: enter the new product's name."],
+    [{ category: '' }, "Line 1: choose the new product's category."],
+    [{ unit_price: '' }, "Line 1: enter the new product's selling price (excl. VAT)."],
+    [{ lead_time_days: 0 }, 'Line 1: the lead time must be at least 1 day.'],
+  ])('refuses a new product missing %o', (change, message) => {
+    const lines = [{ new_product: { ...NEW, ...change }, quantity: 1, unit_cost: 1 }];
+    expect(validatePurchaseInput({ ...PURCHASE, lines }).error).toBe(message);
+  });
+});
+
 describe('validatePurchaseInput', () => {
   it('accepts a good purchase, trims the invoice number and rounds cost to cents', () => {
     const { value, error } = validatePurchaseInput(PURCHASE);

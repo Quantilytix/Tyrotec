@@ -76,7 +76,9 @@ const receiveItn = asyncHandler(async (req, res) => {
   );
   if (upsertErr) throw upsertErr;
 
-  if (isComplete && order.status === 'stock_reserved') {
+  // Both have their stock set aside and can be paid online: reserved at
+  // checkout, or approved (by staff, or when stock it waited for arrived).
+  if (isComplete && ['stock_reserved', 'approved'].includes(order.status)) {
     const result = await transitionOrderStatus(orderId, 'confirmed');
     if (result.error) {
       console.error('PayFast ITN: could not transition order to confirmed:', result.error);
@@ -99,7 +101,7 @@ const receiveItn = asyncHandler(async (req, res) => {
           action: 'order.status_changed',
           entityType: 'order',
           entityId: orderId,
-          description: `PayFast confirmed payment for order #${order.order_number}; status moved to "confirmed".`,
+          description: `PayFast confirmed payment for order #${order.order_number}; status moved from "${order.status}" to "confirmed".`,
         }),
       ]);
     }

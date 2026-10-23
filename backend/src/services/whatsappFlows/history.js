@@ -165,12 +165,12 @@ async function sendOrderDetail(phone, order) {
   // The same two payable statuses paymentService.js works from: 'approved'
   // (manual-approval flow) and 'stock_reserved' (fast-checkout flow).
   // WhatsApp can't take a payment -- customers pay through PayFast in the
-  // portal, or arrange an EFT with the team -- so this points at the portal
+  // portal -- so this points at the portal
   // rather than into a flow.
   const isPayable = ['approved', 'stock_reserved'].includes(order.status);
   const paymentNudge =
     isPayable && !hasActivePayment
-      ? '\n\nThis order is awaiting payment. Open it in the Tyrotec portal to pay, or contact us to arrange an EFT.'
+      ? '\n\nThis order is awaiting payment. Open it in the Tyrotec portal and choose Pay now to pay with PayFast.'
       : '';
 
   await sendButtons(phone, {

@@ -92,8 +92,23 @@ function credentials() {
   };
 }
 
+// What's being paid for, for PayFast's payment page, which shows only a title,
+// this description and the amount: "2 x Waiting Valve, 1 x Pump". PayFast
+// allows 255 characters; a long order is cut off with "...". Plain "x" rather
+// than "×" so nothing depends on how PayFast encodes non-ASCII text.
+const ITEM_DESCRIPTION_MAX = 255;
+function itemDescription(items) {
+  const text = (items || [])
+    .filter((item) => item?.products?.name)
+    .map((item) => `${item.quantity} x ${item.products.name}`)
+    .join(', ');
+  return text.length > ITEM_DESCRIPTION_MAX ? `${text.slice(0, ITEM_DESCRIPTION_MAX - 3)}...` : text;
+}
+
 // order/customer -> the signed field set + the URL to auto-post the browser
 // to. Field order follows PayFast's own documented example order.
+// order.order_items (with products(name)), when given, become the
+// item_description.
 function buildCheckoutFields(order, customer) {
   const { merchant_id, merchant_key, passphrase } = credentials();
   const fields = {
@@ -108,6 +123,9 @@ function buildCheckoutFields(order, customer) {
     amount: Number(order.total_amount).toFixed(2),
     item_name: `Order #${order.order_number}`,
   };
+  // Only when there is one: an empty field would still be posted to PayFast.
+  const description = itemDescription(order.order_items);
+  if (description) fields.item_description = description;
 
   const signature = computeSignature(fields, passphrase);
 
@@ -149,4 +167,4 @@ async function revalidateWithPayfast(rawBody) {
   }
 }
 
-module.exports = { buildCheckoutFields, verifyItnSignature, revalidateWithPayfast, isSandbox, credentials };
+module.exports = { itemDescription, buildCheckoutFields, verifyItnSignature, revalidateWithPayfast, isSandbox, credentials };

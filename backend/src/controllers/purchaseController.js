@@ -3,6 +3,54 @@ const asyncHandler = require('../utils/asyncHandler');
 const { logForUser } = require('../services/activityLogService');
 const { formatCurrency } = require('../utils/formatCurrency');
 const { validatePurchaseInput, receivePurchase } = require('../services/stockService');
+const { notifyStockArrivalsSoon } = require('../services/waitingOrderService');
+const { withSupplierCopies } = require('./productController');
+const { assertCategoryAllowed } = require('../services/categoryService');
+
+// Creates the products a purchase's new-product lines describe, with the
+// purchase's supplier, the same way the product form does (no stock: the
+// purchase adds it). Returns { lines } with product_ids filled in, plus the
+// ids created, or { error, status }.
+async function createNewProducts(value) {
+  const newLines = value.lines.filter((line) => line.new_product);
+  if (newLines.length === 0) return { lines: value.lines, createdIds: [] };
+
+  const skus = newLines.map((line) => line.new_product.sku.toLowerCase());
+  if (new Set(skus).size !== skus.length) return { error: 'Two new products have the same SKU.', status: 400 };
+
+  const supplier = await withSupplierCopies({ supplier_id: value.supplier_id });
+  if (supplier.error) return supplier;
+
+  const rows = [];
+  for (const line of newLines) {
+    const categoryProblem = await assertCategoryAllowed(line.new_product.category);
+    if (categoryProblem) return categoryProblem;
+    rows.push({
+      ...supplier.fields,
+      ...line.new_product,
+      vat_applicable: line.vat_rate > 0,
+      availability: 'local',
+      min_order_qty: 1,
+      stock_quantity: 0,
+    });
+  }
+
+  const { data: created, error } = await supabase.from('products').insert(rows).select('id, sku, name, unit_price');
+  if (error) {
+    if (error.code === '23505') {
+      return { error: 'A product with one of those SKUs already exists. Search for it on the line instead.', status: 400 };
+    }
+    throw error;
+  }
+
+  const idBySku = new Map(created.map((p) => [p.sku.toLowerCase(), p.id]));
+  const lines = value.lines.map((line) => {
+    if (!line.new_product) return line;
+    const { new_product: np, ...rest } = line;
+    return { ...rest, product_id: idBySku.get(np.sku.toLowerCase()) };
+  });
+  return { lines, created, createdIds: created.map((p) => p.id) };
+}
 
 const PURCHASE_DETAIL = `
   *,
@@ -47,8 +95,26 @@ const createPurchase = asyncHandler(async (req, res) => {
   const { value, error: invalid } = validatePurchaseInput(req.body);
   if (invalid) return res.status(400).json({ error: invalid });
 
-  const result = await receivePurchase(value, req.user.id);
-  if (result.error) return res.status(result.status).json({ error: result.error });
+  const products = await createNewProducts(value);
+  if (products.error) return res.status(products.status).json({ error: products.error });
+
+  const result = await receivePurchase({ ...value, lines: products.lines }, req.user.id);
+  if (result.error) {
+    // Nothing references the new products yet: take them away again, so a
+    // failed purchase leaves no half-made catalogue entries behind.
+    if (products.createdIds.length) await supabase.from('products').delete().in('id', products.createdIds);
+    return res.status(result.status).json({ error: result.error });
+  }
+  for (const p of products.created || []) {
+    await logForUser(req.user, {
+      action: 'product.created',
+      entityType: 'product',
+      entityId: p.id,
+      description: `Added product ${p.name} (${p.sku}) at ${formatCurrency(p.unit_price)} excl. VAT while recording a purchase.`,
+    });
+  }
+  // The new stock may have gone to orders that were waiting for it.
+  notifyStockArrivalsSoon();
 
   const { data } = await supabase.from('purchases').select(PURCHASE_DETAIL).eq('id', result.id).single();
   const units = value.lines.reduce((sum, line) => sum + line.quantity, 0);

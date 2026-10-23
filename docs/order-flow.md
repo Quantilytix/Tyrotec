@@ -152,3 +152,47 @@ order whose reservation expires within `RESERVATION_WARNING_LEAD_MINUTES`
 double-send. Kept as its own job rather than folded into the release job
 above so either can change schedule or logic independently, and a bug in the
 warning path can't affect the actual restock/cancel path.
+
+## Orders waiting for stock (037)
+
+Out-of-stock products can be quoted and ordered. The customer sees "Out of
+stock: usually delivered in about N days" (the product's lead time) on the
+products, cart, quote and order pages, and in WhatsApp.
+
+- An order short on stock lands in `pending_approval` with a `stock_short`
+  review (portal checkout, staff conversion and now WhatsApp too).
+- Staff can tell the customer when stock should arrive: **Arrives in N days**
+  on the admin order page (`PATCH /orders/:id/stock-eta`, saved as
+  `orders.stock_expected_at`). The customer is notified.
+- When stock goes up (purchase, positive adjustment, cancelled order,
+  lapsed reservation), a deferred trigger approves waiting orders **oldest
+  first**, only those every line of which can be supplied in full, in the same
+  transaction that added the stock. The customer is notified
+  (`waitingOrderService.notifyStockArrivals`).
+- Approving a waiting order (automatically or by staff) sets
+  `orders.payment_due_at` to 3 days later. The customer can pay online
+  (PayFast now accepts `approved` orders), by EFT, or switch to an invoice if
+  their account allows. Unpaid by the deadline, the order is cancelled and its
+  stock goes to the next waiting order (`cancel_overdue_unpaid_orders`).
+- `src/jobs/waitingOrders.js` runs every 5 minutes with the other jobs (or
+  as a Render Cron Job on a paid plan) as the safety net for both.
+
+## Discounts (038)
+
+Admins put products on discount on **Discounts** (admin menu): a reason the
+customer sees, a percentage off, an optional last day, and the products.
+
+- One active discount per product. A product's current discount is mirrored
+  on `products.discount_*` so the catalogue and the products page's deals banner / **Deals only** button
+  are a plain column check.
+- The server prices quotes (`utils/discounts.js`, `quoteService.js`); quote
+  lines, and the order lines copied from them, keep `list_price`,
+  `discount_percent` and `discount_reason`. QX gets the discounted price, with
+  the discount in the line description.
+- A quote priced with a discount can't be ordered once that discount has
+  ended (`discountService.checkQuoteDiscounts`, 409 `discount_ended`). The
+  quote page offers **Get an updated quote** (`POST /quotes/:id/refresh`),
+  which re-quotes the same products at today's prices and expires the old one.
+- Discounts past their last day are cleared from products by
+  `clear_expired_discounts()` (jobs, and before listing discounted products);
+  pricing checks the last day itself either way.

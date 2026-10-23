@@ -4,6 +4,7 @@ const { logForUser } = require('../services/activityLogService');
 const { formatCurrency } = require('../utils/formatCurrency');
 const { notifyIfLowStockCrossing } = require('./productController');
 const { validateAdjustmentInput, adjustStock, recordOpeningStock } = require('../services/stockService');
+const { notifyStockArrivalsSoon } = require('../services/waitingOrderService');
 
 const REASON_LABELS = {
   damaged: 'Damaged',
@@ -38,6 +39,8 @@ const createAdjustment = asyncHandler(async (req, res) => {
 
   const result = await adjustStock(value, req.user.id);
   if (result.error) return res.status(result.status).json({ error: result.error });
+  // Stock added may have gone to orders that were waiting for it.
+  if (value.quantity_change > 0) notifyStockArrivalsSoon();
 
   const { data } = await supabase
     .from('stock_adjustments')

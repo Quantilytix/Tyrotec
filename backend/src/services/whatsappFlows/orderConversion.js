@@ -2,6 +2,7 @@ const supabase = require('../../config/supabase');
 const { sendList, sendText, sendButtons, uploadMedia, sendDocument } = require('../../config/whatsapp');
 const { formatCurrency } = require('../../utils/formatCurrency');
 const { convertQuoteForCustomer } = require('../quoteService');
+const { flagStockShort } = require('../adminReviewService');
 const { generateQuotePdfBuffer } = require('../quotePdfService');
 
 // Interactive button body text has a practical length limit -- for a quote
@@ -136,9 +137,20 @@ async function handleConfirmConvert(conversation, quoteId) {
     return { newState: 'main_menu', newContext: {} };
   }
 
+  // Flagged like a short portal checkout, so the order is approved
+  // automatically once the stock arrives (037).
+  const { data: lines } = await supabase
+    .from('order_items')
+    .select('quantity, products(stock_quantity)')
+    .eq('order_id', result.orderId);
+  const waitingForStock = (lines || []).some((l) => l.quantity > (l.products?.stock_quantity ?? 0));
+  if (waitingForStock) await flagStockShort(result.orderId);
+
   await sendText(
     phone,
-    `✅ Order placed from quote #${result.quoteNumber}! Your order still needs to be approved by our team before payment. We'll let you know as soon as that happens.`
+    waitingForStock
+      ? `✅ Order placed from quote #${result.quoteNumber}! Some items aren't in stock yet, so your order waits until they arrive. We'll let you know when they do, and you pay then.`
+      : `✅ Order placed from quote #${result.quoteNumber}! Your order still needs to be approved by our team before payment. We'll let you know as soon as that happens.`
   );
   const { sendMenu } = require('./mainMenu');
   await sendMenu(phone);

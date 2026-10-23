@@ -17,6 +17,7 @@ const adminReviewRoutes = require('./routes/adminReviewRoutes');
 const activityLogRoutes = require('./routes/activityLogRoutes');
 const staffRoutes = require('./routes/staffRoutes');
 const supplierRoutes = require('./routes/supplierRoutes');
+const discountRoutes = require('./routes/discountRoutes');
 const purchaseRoutes = require('./routes/purchaseRoutes');
 const stockRoutes = require('./routes/stockRoutes');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
@@ -88,6 +89,7 @@ app.use('/api/admin/reviews', adminReviewRoutes);
 app.use('/api/activity-log', activityLogRoutes);
 app.use('/api/staff', staffRoutes);
 app.use('/api/suppliers', supplierRoutes);
+app.use('/api/discounts', discountRoutes);
 app.use('/api/purchases', purchaseRoutes);
 app.use('/api/stock', stockRoutes);
 

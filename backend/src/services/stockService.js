@@ -49,11 +49,31 @@ function validatePurchaseInput(body = {}) {
     const quantity = Number(line?.quantity);
     const unitCost = Number(line?.unit_cost);
     const vatRate = line?.vat_rate === undefined || line?.vat_rate === null ? 15 : Number(line.vat_rate);
-    if (!line?.product_id) return { error: `Line ${n}: choose a product.` };
     if (!Number.isInteger(quantity) || quantity <= 0) return { error: `Line ${n}: the quantity must be a whole number above 0.` };
     if (!Number.isFinite(unitCost) || unitCost < 0) return { error: `Line ${n}: enter the unit cost (excl. VAT).` };
     if (![0, 15].includes(vatRate)) return { error: `Line ${n}: VAT must be 15% or 0%.` };
-    cleaned.push({ product_id: String(line.product_id), quantity, unit_cost: Math.round(unitCost * 100) / 100, vat_rate: vatRate });
+    const base = { quantity, unit_cost: Math.round(unitCost * 100) / 100, vat_rate: vatRate };
+
+    // A product that isn't in the catalogue yet: created with the purchase
+    // (purchaseController.js), from the few details a product needs.
+    if (!line?.product_id && line?.new_product) {
+      const np = line.new_product;
+      const sku = String(np.sku || '').trim();
+      const name = String(np.name || '').trim();
+      const category = String(np.category || '').trim();
+      // Blank is not R0: Number('') would quietly price it at nothing.
+      const unitPrice = np.unit_price === '' || np.unit_price == null ? NaN : Number(np.unit_price);
+      const leadTime = Number(np.lead_time_days);
+      if (!sku) return { error: `Line ${n}: enter the new product's SKU.` };
+      if (!name) return { error: `Line ${n}: enter the new product's name.` };
+      if (!category) return { error: `Line ${n}: choose the new product's category.` };
+      if (!Number.isFinite(unitPrice) || unitPrice < 0) return { error: `Line ${n}: enter the new product's selling price (excl. VAT).` };
+      if (!Number.isInteger(leadTime) || leadTime < 1) return { error: `Line ${n}: the lead time must be at least 1 day.` };
+      cleaned.push({ ...base, new_product: { sku, name, category, unit_price: Math.round(unitPrice * 100) / 100, lead_time_days: leadTime } });
+      continue;
+    }
+    if (!line?.product_id) return { error: `Line ${n}: choose a product.` };
+    cleaned.push({ ...base, product_id: String(line.product_id) });
   }
 
   return {

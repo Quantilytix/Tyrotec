@@ -57,9 +57,17 @@ export function CartProvider({ children }) {
           sku: product.sku,
           // Excl VAT, with the rate this product carries. Both are only for
           // showing the customer what they're building: the server prices the
-          // quote again from the product record when it's submitted.
-          unit_price: product.unit_price,
+          // quote again from the product record when it's submitted. Likewise
+          // a discount: shown here, applied by the server.
+          unit_price: product.discount ? product.discount.price : product.unit_price,
+          list_price: product.discount ? product.unit_price : null,
+          discount_percent: product.discount?.percent ?? null,
+          discount_reason: product.discount?.reason ?? null,
           vat_rate: rateForProduct(product),
+          // Stock and usual delivery time when it was added, only to tell
+          // the customer a line may take a while; the order checks real stock.
+          stock_quantity: product.stock_quantity,
+          lead_time_days: product.lead_time_days,
           quantity,
         },
       ];

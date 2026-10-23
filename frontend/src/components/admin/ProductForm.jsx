@@ -197,11 +197,13 @@ export default function ProductForm({ initialProduct, onSubmit, onCancel, catego
           <input
             required
             type="number"
-            min="0"
+            min="1"
+            step="1"
             value={form.lead_time_days}
             onChange={update('lead_time_days')}
             className={FIELD_CLASS}
           />
+          <p className="mt-1 text-xs text-slate-400">How long it usually takes to get more. Customers see it when it&apos;s out of stock.</p>
         </div>
         <div>
           <label className={LABEL_CLASS}>Min order qty</label>

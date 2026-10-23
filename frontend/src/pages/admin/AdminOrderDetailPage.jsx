@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { getOrderById, updateOrderStatus } from '../../api/orders';
+import { getOrderById, updateOrderStatus, setOrderStockEta } from '../../api/orders';
 import { recordPayment } from '../../api/payments';
-import { formatCurrency, formatDate } from '../../utils/formatters';
+import { formatCurrency, formatDate, formatDay } from '../../utils/formatters';
+import { longestLeadTime } from '../../utils/availability';
 import { displayTotals, lineTotals, vatRateLabel } from '../../utils/vat';
 import { downloadReceiptPdf, getReceiptPayment } from '../../utils/generateReceiptPdf';
 import StatusBadge from '../../components/ui/StatusBadge';
@@ -12,6 +13,7 @@ import Modal from '../../components/ui/Modal';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import Card from '../../components/ui/Card';
 import TotalsSummary from '../../components/ui/TotalsSummary';
+import DiscountNote from '../../components/ui/DiscountNote';
 import RecordPaymentForm from '../../components/RecordPaymentForm';
 
 // What staff can actually DO to an order right now, in plain words.
@@ -34,6 +36,66 @@ const ORDER_ACTIONS = {
 
 // Every order that hasn't finished can be called off.
 const CANCELLABLE = ['pending_approval', 'approved', 'processing', 'stock_reserved', 'awaiting_payment', 'confirmed'];
+
+// An order waiting for stock: which lines are short, when staff told the
+// customer it should arrive, and a box to tell them (again). The order is
+// approved automatically, oldest first, once stock covers every line.
+function WaitingForStockCard({ order, shortLines, onSaved }) {
+  const [days, setDays] = useState(String(longestLeadTime(shortLines.map((l) => l.products)) || ''));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const save = async () => {
+    setError('');
+    setSaving(true);
+    try {
+      await setOrderStockEta(order.id, Number(days));
+      await onSaved();
+    } catch (err) {
+      setError(err.response?.data?.error || 'Could not save the arrival date.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card className="mt-6 p-4">
+      <p className="font-medium text-ink">Waiting for stock</p>
+      <ul className="mt-2 space-y-1 text-sm text-slate-600">
+        {shortLines.map((line) => (
+          <li key={line.id}>
+            {line.products.name}: needs {line.quantity}, {line.products.stock_quantity} in stock
+          </li>
+        ))}
+      </ul>
+      <p className="mt-2 text-sm text-slate-500">
+        {order.stock_expected_at
+          ? `Customer told to expect it around ${formatDay(order.stock_expected_at)}.`
+          : 'The customer has not been told when to expect it yet.'}{' '}
+        It's approved automatically once the stock is in, and the customer then has 3 days to pay.
+      </p>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <label htmlFor="stock-eta-days" className="text-sm text-slate-600">
+          Arrives in
+        </label>
+        <input
+          id="stock-eta-days"
+          type="number"
+          min={0}
+          max={365}
+          value={days}
+          onChange={(e) => setDays(e.target.value)}
+          className="w-20 rounded-lg border border-slate-200 px-2 py-1 text-sm outline-none transition-colors duration-150 focus:border-teal-500"
+        />
+        <span className="text-sm text-slate-600">days</span>
+        <Button onClick={save} loading={saving} disabled={days === '' || Number(days) < 0}>
+          Tell the customer
+        </Button>
+        {error && <p className="text-sm text-bad-500">{error}</p>}
+      </div>
+    </Card>
+  );
+}
 
 // Says what the order is waiting on when there's nothing to click.
 const WAITING_ON = {
@@ -95,7 +157,6 @@ export default function AdminOrderDetailPage() {
   if (loading) return <Spinner />;
   if (!order) return <p className="text-sm text-slate-500">Order not found.</p>;
 
-  const actions = ORDER_ACTIONS[order.status] || [];
   const canCancel = CANCELLABLE.includes(order.status);
 
   // Only one payment can be actively submitted/approved at a time (enforced
@@ -107,6 +168,15 @@ export default function AdminOrderDetailPage() {
     : null;
   const canRecordPayment =
     ['approved', 'stock_reserved', 'awaiting_payment'].includes(order.status) && !activePayment;
+  const shortLines =
+    order.status === 'pending_approval'
+      ? (order.order_items || []).filter((item) => item.products && item.quantity > item.products.stock_quantity)
+      : [];
+  // Approving needs every line in stock, and an order waiting for stock is
+  // approved automatically when it arrives, so the button would only fail.
+  const actions = (ORDER_ACTIONS[order.status] || []).filter(
+    (action) => !(action.status === 'approved' && shortLines.length > 0)
+  );
 
   return (
     <div>
@@ -156,6 +226,7 @@ export default function AdminOrderDetailPage() {
                 <td className="px-4 py-3">
                   <p className="font-medium text-ink">{item.products?.name}</p>
                   <p className="font-mono text-xs text-slate-400">{item.products?.sku}</p>
+                  <DiscountNote line={item} />
                 </td>
                 <td className="px-4 py-3 font-mono text-ink">{formatCurrency(item.unit_price)}</td>
                 <td className="px-4 py-3 text-slate-600">{item.quantity}</td>
@@ -168,6 +239,17 @@ export default function AdminOrderDetailPage() {
           </tbody>
         </table>
       </Card>
+
+      {shortLines.length > 0 && <WaitingForStockCard order={order} shortLines={shortLines} onSaved={load} />}
+
+      {order.status === 'approved' && order.payment_due_at && !activePayment && (
+        <Card className="mt-6 p-4">
+          <p className="text-sm text-slate-600">
+            Payment due by {formatDate(order.payment_due_at)}. If it isn't paid by then, the order is cancelled
+            automatically and its stock goes to the next waiting customer.
+          </p>
+        </Card>
+      )}
 
       <Card className="mt-6 flex flex-col gap-4 p-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <TotalsSummary totals={displayTotals(order)} className="text-left" />

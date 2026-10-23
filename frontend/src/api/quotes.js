@@ -20,6 +20,10 @@ export const convertQuoteToOrder = (quoteId) =>
 export const checkoutQuoteFast = (quoteId) =>
   apiClient.post(`/quotes/${quoteId}/checkout`);
 
+// Same products at today's prices, replacing a quote that can't be accepted
+// (a discount it was priced with has ended). Returns { quoteId }.
+export const refreshQuote = (quoteId) => apiClient.post(`/quotes/${quoteId}/refresh`);
+
 export const getAllQuotesAdmin = () => apiClient.get('/quotes/admin/all');
 
 export const updateQuoteStatus = (quoteId, status) =>

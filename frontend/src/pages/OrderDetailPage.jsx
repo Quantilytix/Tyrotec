@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { getOrderById, getOrderStatus, initiatePayfastPayment, payOrderOnInvoice } from '../api/orders';
-import { formatCurrency, formatDate } from '../utils/formatters';
+import { formatCurrency, formatDate, formatDay } from '../utils/formatters';
+import { availabilityNote, longestLeadTime } from '../utils/availability';
 import { displayTotals, lineTotals, vatRateLabel } from '../utils/vat';
 import { downloadReceiptPdf, getReceiptPayment } from '../utils/generateReceiptPdf';
 import StatusBadge from '../components/ui/StatusBadge';
@@ -10,6 +11,7 @@ import Spinner from '../components/ui/Spinner';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import TotalsSummary from '../components/ui/TotalsSummary';
+import DiscountNote from '../components/ui/DiscountNote';
 import PayfastRedirectForm from '../components/PayfastRedirectForm';
 
 const POLL_MS = 5000;
@@ -97,16 +99,19 @@ export default function OrderDetailPage() {
     ? [...order.payments].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0]
     : null;
   const isStockReserved = order.status === 'stock_reserved';
-  // PayFast is the only way a customer can pay themselves. An 'approved'
-  // order (the staff-approval route) is settled offline and recorded by the
-  // team, so it shows an explanation here rather than a button.
-  const canPayOnline = isStockReserved && !activePayment;
-  // Two ways an order waits on money the customer doesn't pay online:
-  // 'approved' (staff-review route) and 'awaiting_payment' (ordered on
-  // account). Neither has a timer; both are settled by staff recording the
-  // payment.
+  const isApproved = order.status === 'approved';
+  // PayFast is the only way a customer can pay themselves. Both of these
+  // have their stock set aside: reserved at checkout, or approved (by staff,
+  // or when stock the order was waiting for arrived). An approved order can
+  // also still be paid by EFT, which staff record.
+  const canPayOnline = (isStockReserved || isApproved) && !activePayment;
   const isOnAccount = order.status === 'awaiting_payment';
-  const awaitingOfflinePayment = ['approved', 'awaiting_payment'].includes(order.status) && !activePayment;
+  const awaitingOfflinePayment = isOnAccount && !activePayment;
+  // An order waiting for approval because some items aren't in stock.
+  const shortLines = (order.order_items || [])
+    .filter((item) => item.products && item.quantity > item.products.stock_quantity)
+    .map((item) => item.products);
+  const waitingForStock = order.status === 'pending_approval' && shortLines.length > 0;
   const reservation = order.stock_reservations?.[0];
   const hasReceipt = Boolean(getReceiptPayment(order));
 
@@ -173,6 +178,12 @@ export default function OrderDetailPage() {
                 <td className="px-4 py-3">
                   <p className="font-medium text-ink">{item.products?.name}</p>
                   <p className="font-mono text-xs text-slate-400">{item.products?.sku}</p>
+                  <DiscountNote line={item} />
+                  {order.status === 'pending_approval' && item.products && availabilityNote(item.products.stock_quantity, item.quantity, item.products.lead_time_days) && (
+                    <p className="mt-1 text-xs text-amber-600">
+                      {availabilityNote(item.products.stock_quantity, item.quantity, item.products.lead_time_days)}
+                    </p>
+                  )}
                 </td>
                 <td className="px-4 py-3 font-mono text-ink">{formatCurrency(item.unit_price)}</td>
                 <td className="px-4 py-3 text-slate-600">{item.quantity}</td>
@@ -195,7 +206,27 @@ export default function OrderDetailPage() {
       {order.status === 'pending_approval' && (
         <Card className="mt-6 p-4">
           <p className="text-sm text-amber-600">
-            Your order is awaiting staff approval. You'll get a notification once it's ready for payment.
+            {waitingForStock
+              ? `Some items on this order aren't in stock yet. ${
+                  order.stock_expected_at
+                    ? `They're expected around ${formatDay(order.stock_expected_at)}.`
+                    : `They usually take about ${longestLeadTime(shortLines)} ${
+                        longestLeadTime(shortLines) === 1 ? 'day' : 'days'
+                      } to arrive.`
+                } We'll let you know as soon as they arrive, and you pay then.`
+              : "Your order is awaiting staff approval. You'll get a notification once it's ready for payment."}
+          </p>
+        </Card>
+      )}
+
+      {isApproved && !activePayment && (
+        <Card className="mt-6 p-4">
+          <p className="text-sm text-slate-600">
+            Your order is approved and its stock is set aside. Choose Pay now to pay with PayFast (card or Instant
+            EFT)
+            {order.payment_due_at
+              ? `. Please pay by ${formatDate(order.payment_due_at)}: after that the stock goes to the next customer.`
+              : '.'}
           </p>
         </Card>
       )}
@@ -203,9 +234,8 @@ export default function OrderDetailPage() {
       {awaitingOfflinePayment && (
         <Card className="mt-6 p-4">
           <p className="text-sm text-slate-600">
-            {isOnAccount
-              ? 'This order is placed on account and your stock is set aside. Payment is due on invoice — your receipt appears here as soon as it reflects.'
-              : 'Your order is approved and awaiting payment. Our team will be in touch with payment details, and your receipt appears here as soon as the payment reflects.'}
+            This order is placed on account and your stock is set aside. Payment is due on invoice — your receipt
+            appears here as soon as it reflects.
           </p>
         </Card>
       )}

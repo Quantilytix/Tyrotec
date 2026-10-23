@@ -12,6 +12,7 @@ const { buildQuotesWorkbook, sendWorkbook } = require('../services/exportService
 const { applyDateRange, fetchAllRows } = require('../utils/exportQuery');
 const { filterBySearch } = require('../utils/searchFilter');
 const { displayTotals } = require('../utils/vat');
+const { checkQuoteDiscounts, endedDiscountLines } = require('../services/discountService');
 
 const RESERVATION_MINUTES = Number(process.env.RESERVATION_EXPIRY_MINUTES) || 60;
 
@@ -198,7 +199,7 @@ const sendQuoteEmail = asyncHandler(async (req, res) => {
 const getQuoteById = asyncHandler(async (req, res) => {
   let query = supabase
     .from('quotes')
-    .select('*, users(email, company_name), quote_items(*, products(name, sku))')
+    .select('*, users(email, company_name), quote_items(*, products(name, sku, stock_quantity, lead_time_days))')
     .eq('id', req.params.quoteId);
 
   if (!isStaff(req.user.role)) {
@@ -207,7 +208,47 @@ const getQuoteById = asyncHandler(async (req, res) => {
 
   const { data, error } = await query.single();
   if (error || !data) return res.status(404).json({ error: 'Quote not found' });
-  return res.json(data);
+
+  // Flags lines priced with a discount that has since ended: the quote can't
+  // be accepted, and the page offers an updated one instead.
+  const ended = new Set((await endedDiscountLines(data.quote_items)).map((item) => item.id));
+  return res.json({
+    ...data,
+    quote_items: (data.quote_items || []).map((item) => ({ ...item, discount_ended: ended.has(item.id) })),
+  });
+});
+
+// A fresh quote for the same products and quantities at today's prices,
+// replacing one that can no longer be accepted (typically because a discount
+// it was priced with has ended). The customer for their own quote; staff for
+// any customer's. The old quote is marked expired.
+const refreshQuote = asyncHandler(async (req, res) => {
+  let query = supabase
+    .from('quotes')
+    .select('id, quote_number, status, customer_id, source, users(email, company_name), quote_items(product_id, quantity)')
+    .eq('id', req.params.quoteId);
+  if (!isStaff(req.user.role)) query = query.eq('customer_id', req.user.id);
+
+  const { data: quote, error } = await query.single();
+  if (error || !quote) return res.status(404).json({ error: 'Quote not found' });
+  if (quote.status !== 'submitted') {
+    return res.status(400).json({ error: 'Only a quote that has not been ordered can be updated.' });
+  }
+
+  const customerLabel = quote.users?.company_name || quote.users?.email || 'Customer';
+  const items = (quote.quote_items || []).map((item) => ({ product_id: item.product_id, quantity: item.quantity }));
+  const result = await createQuoteForCustomer(quote.customer_id, customerLabel, items, isStaff(req.user.role) ? 'admin' : quote.source || 'portal');
+  if (result.error) return res.status(result.status).json({ error: result.error });
+
+  await supabase.from('quotes').update({ status: 'expired' }).eq('id', quote.id).eq('status', 'submitted');
+  await logForUser(req.user, {
+    action: 'quote.refreshed',
+    entityType: 'quote',
+    entityId: result.quoteId,
+    description: `Replaced quote #${quote.quote_number} with #${result.quoteNumber} at today's prices.`,
+  });
+
+  return res.status(201).json(result);
 });
 
 // Customer only -- converts their own submitted quote into an order via the
@@ -254,6 +295,11 @@ const convertQuoteToOrder = asyncHandler(async (req, res) => {
 // customer does that as a separate step from the order page.
 const checkoutQuoteFast = asyncHandler(async (req, res) => {
   const { quoteId } = req.params;
+
+  const discountProblem = await checkQuoteDiscounts(quoteId);
+  if (discountProblem) {
+    return res.status(discountProblem.status).json({ error: discountProblem.error, code: discountProblem.code });
+  }
 
   const { data: rows, error } = await supabase.rpc('checkout_quote_with_reservation', {
     p_quote_id: quoteId,
@@ -421,6 +467,7 @@ const convertQuoteToOrderAdmin = asyncHandler(async (req, res) => {
 });
 
 module.exports = {
+  refreshQuote,
   createQuote,
   createQuoteForCustomerAdmin,
   getCustomerQuotes,

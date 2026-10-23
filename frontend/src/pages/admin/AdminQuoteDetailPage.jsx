@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { sendQuoteEmailAdmin, getQuoteById, updateQuoteStatus, convertQuoteToOrderAdmin } from '../../api/quotes';
+import { sendQuoteEmailAdmin, getQuoteById, updateQuoteStatus, convertQuoteToOrderAdmin, refreshQuote } from '../../api/quotes';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { displayTotals, lineTotals, vatRateLabel } from '../../utils/vat';
 import { downloadQuotePdf } from '../../utils/generateQuotePdf';
@@ -10,6 +10,7 @@ import Button from '../../components/ui/Button';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import Card from '../../components/ui/Card';
 import TotalsSummary from '../../components/ui/TotalsSummary';
+import DiscountNote from '../../components/ui/DiscountNote';
 
 export default function AdminQuoteDetailPage() {
   const { quoteId } = useParams();
@@ -24,6 +25,7 @@ export default function AdminQuoteDetailPage() {
   const [emailError, setEmailError] = useState('');
   const [converting, setConverting] = useState(false);
   const [showConvertConfirm, setShowConvertConfirm] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const load = () => getQuoteById(quoteId).then(({ data }) => setQuote(data));
 
@@ -62,11 +64,27 @@ export default function AdminQuoteDetailPage() {
     }
   };
 
+  // A discount this quote was priced with has ended: replace it with one at
+  // today's prices (the old one is marked expired).
+  const handleRefresh = async () => {
+    setError('');
+    setRefreshing(true);
+    try {
+      const { data } = await refreshQuote(quoteId);
+      navigate(`/admin/quotes/${data.quoteId}`);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Could not update this quote.');
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   if (loading) return <Spinner />;
   if (!quote) return <p className="text-sm text-slate-500">Quote not found.</p>;
 
+  const discountEnded = quote.quote_items?.some((item) => item.discount_ended);
   const canExpire = ['draft', 'submitted'].includes(quote.status);
-  const canConvert = ['draft', 'submitted'].includes(quote.status);
+  const canConvert = ['draft', 'submitted'].includes(quote.status) && !discountEnded;
 
   // The PDF is how a quote reaches a customer who doesn't use the portal:
   // staff send it however they already do (email, WhatsApp, printed for a
@@ -93,6 +111,9 @@ export default function AdminQuoteDetailPage() {
         name: item.products?.name,
         sku: item.products?.sku,
         unit_price: item.unit_price,
+        list_price: item.list_price,
+        discount_percent: item.discount_percent,
+        discount_reason: item.discount_reason,
         quantity: item.quantity,
         vat_rate: item.vat_rate,
       })),
@@ -146,6 +167,8 @@ export default function AdminQuoteDetailPage() {
                 <td className="px-4 py-3">
                   <p className="font-medium text-ink">{item.products?.name}</p>
                   <p className="font-mono text-xs text-slate-400">{item.products?.sku}</p>
+                  <DiscountNote line={item} />
+                  {item.discount_ended && <p className="mt-1 text-xs text-bad-500">This discount has ended.</p>}
                 </td>
                 <td className="px-4 py-3 font-mono text-ink">{formatCurrency(item.unit_price)}</td>
                 <td className="px-4 py-3 text-slate-600">{item.quantity}</td>
@@ -179,6 +202,11 @@ export default function AdminQuoteDetailPage() {
           {canConvert && (
             <Button onClick={() => setShowConvertConfirm(true)} loading={converting}>
               Convert to order
+            </Button>
+          )}
+          {quote.status === 'submitted' && discountEnded && (
+            <Button onClick={handleRefresh} loading={refreshing}>
+              Discount ended: get updated quote
             </Button>
           )}
         </div>

@@ -222,7 +222,7 @@ export default function ProductImportModal({ onDone, categories = [], onCreateCa
                   {row.action === 'create' ? (
                     <input
                       type="number"
-                      min="0"
+                      min="1"
                       value={row.lead_time_days}
                       onChange={(e) => updateRow(i, 'lead_time_days', e.target.value)}
                       className={CELL_INPUT}

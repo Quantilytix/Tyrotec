@@ -1,9 +1,13 @@
 jest.mock('../warnExpiringReservations', () => ({ run: jest.fn() }));
 jest.mock('../releaseExpiredReservations', () => ({ run: jest.fn() }));
+jest.mock('../waitingOrders', () => ({ run: jest.fn() }));
+jest.mock('../clearExpiredDiscounts', () => ({ run: jest.fn() }));
 jest.mock('../syncToQx', () => ({ run: jest.fn() }));
 
 const warnExpiringReservations = require('../warnExpiringReservations');
 const releaseExpiredReservations = require('../releaseExpiredReservations');
+const waitingOrders = require('../waitingOrders');
+const clearExpiredDiscounts = require('../clearExpiredDiscounts');
 const syncToQx = require('../syncToQx');
 const { startInProcessJobs } = require('../inProcessScheduler');
 
@@ -19,6 +23,8 @@ describe('startInProcessJobs', () => {
     jest.clearAllMocks();
     warnExpiringReservations.run.mockResolvedValue();
     releaseExpiredReservations.run.mockResolvedValue();
+    waitingOrders.run.mockResolvedValue();
+    clearExpiredDiscounts.run.mockResolvedValue();
     syncToQx.run.mockResolvedValue();
   });
 
@@ -27,10 +33,11 @@ describe('startInProcessJobs', () => {
     jest.useRealTimers();
   });
 
-  it('runs nothing until the first-run delay, then warns, releases, and syncs to QX', async () => {
+  it('runs nothing until the first-run delay, then warns, releases, serves waiting orders, and syncs to QX', async () => {
     const order = [];
     warnExpiringReservations.run.mockImplementation(async () => order.push('warn'));
     releaseExpiredReservations.run.mockImplementation(async () => order.push('release'));
+    waitingOrders.run.mockImplementation(async () => order.push('waiting'));
     syncToQx.run.mockImplementation(async () => order.push('qx'));
 
     stop = startInProcessJobs({ intervalMs: 60000, firstRunDelayMs: 1000 });
@@ -40,7 +47,7 @@ describe('startInProcessJobs', () => {
 
     jest.advanceTimersByTime(1);
     await flush();
-    expect(order).toEqual(['warn', 'release', 'qx']);
+    expect(order).toEqual(['warn', 'release', 'waiting', 'qx']);
   });
 
   it('still syncs to QX when a reservation job fails, and the other way round', async () => {

@@ -85,7 +85,7 @@ async function confirmProductImport(rows) {
               unit_price: row.unit_price,
               stock_quantity: 0,
               availability: row.availability || DEFAULT_AVAILABILITY,
-              lead_time_days: row.lead_time_days ?? DEFAULT_LEAD_TIME_DAYS,
+              lead_time_days: Number(row.lead_time_days) > 0 ? Number(row.lead_time_days) : DEFAULT_LEAD_TIME_DAYS,
               min_order_qty: row.min_order_qty ?? DEFAULT_MIN_ORDER_QTY,
             },
           ])

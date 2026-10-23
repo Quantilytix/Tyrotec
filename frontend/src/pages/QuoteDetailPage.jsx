@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { getQuoteById, checkoutQuoteFast } from '../api/quotes';
+import { getQuoteById, checkoutQuoteFast, refreshQuote } from '../api/quotes';
+import DiscountNote from '../components/ui/DiscountNote';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrency, formatDate } from '../utils/formatters';
 import { displayTotals, lineTotals, vatRateLabel } from '../utils/vat';
 import { downloadQuotePdf } from '../utils/generateQuotePdf';
+import { availabilityNote } from '../utils/availability';
 import StatusBadge from '../components/ui/StatusBadge';
 import Spinner from '../components/ui/Spinner';
 import Button from '../components/ui/Button';
@@ -18,6 +20,7 @@ export default function QuoteDetailPage() {
   const [quote, setQuote] = useState(null);
   const [loading, setLoading] = useState(true);
   const [checkingOut, setCheckingOut] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -32,6 +35,21 @@ export default function QuoteDetailPage() {
   // never auto-triggered here. If stock is short the order is still created,
   // falling back to the staff-approval queue; that's the system's decision,
   // not something the customer should have to understand or choose.
+  // A discount this quote was priced with has ended: a new quote for the
+  // same products at today's prices replaces it.
+  const handleRefresh = async () => {
+    setError('');
+    setRefreshing(true);
+    try {
+      const { data } = await refreshQuote(quoteId);
+      navigate(`/quotes/${data.quoteId}`);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Could not update this quote.');
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   const handleFastCheckout = async () => {
     setError('');
     setCheckingOut(true);
@@ -47,7 +65,11 @@ export default function QuoteDetailPage() {
   if (loading) return <Spinner />;
   if (!quote) return <p className="text-sm text-slate-500">Quote not found.</p>;
 
-  const canConvert = quote.status === 'submitted';
+  const discountEnded = quote.quote_items?.some((item) => item.discount_ended);
+  const canConvert = quote.status === 'submitted' && !discountEnded;
+  const hasShortItems = quote.quote_items?.some(
+    (item) => item.products && availabilityNote(item.products.stock_quantity, item.quantity, item.products.lead_time_days)
+  );
 
   const handleDownload = () => {
     downloadQuotePdf({
@@ -55,6 +77,9 @@ export default function QuoteDetailPage() {
         name: item.products?.name,
         sku: item.products?.sku,
         unit_price: item.unit_price,
+        list_price: item.list_price,
+        discount_percent: item.discount_percent,
+        discount_reason: item.discount_reason,
         quantity: item.quantity,
         vat_rate: item.vat_rate,
       })),
@@ -99,6 +124,13 @@ export default function QuoteDetailPage() {
                 <td className="px-4 py-3">
                   <p className="font-medium text-ink">{item.products?.name}</p>
                   <p className="font-mono text-xs text-slate-400">{item.products?.sku}</p>
+                  <DiscountNote line={item} />
+                  {item.discount_ended && <p className="mt-1 text-xs text-bad-500">This discount has ended.</p>}
+                  {item.products && availabilityNote(item.products.stock_quantity, item.quantity, item.products.lead_time_days) && (
+                    <p className="mt-1 text-xs text-amber-600">
+                      {availabilityNote(item.products.stock_quantity, item.quantity, item.products.lead_time_days)}
+                    </p>
+                  )}
                 </td>
                 <td className="px-4 py-3 font-mono text-ink">{formatCurrency(item.unit_price)}</td>
                 <td className="px-4 py-3 text-slate-600">{item.quantity}</td>
@@ -111,6 +143,27 @@ export default function QuoteDetailPage() {
           </tbody>
         </table>
       </Card>
+
+      {quote.status === 'submitted' && discountEnded && (
+        <Card className="mt-6 flex flex-wrap items-center justify-between gap-3 p-4">
+          <p className="text-sm text-bad-500">
+            A discount on this quote has ended, so its prices no longer apply. Get an updated quote at today's prices
+            to order.
+          </p>
+          <Button onClick={handleRefresh} loading={refreshing}>
+            Get an updated quote
+          </Button>
+        </Card>
+      )}
+
+      {canConvert && hasShortItems && (
+        <Card className="mt-6 p-4">
+          <p className="text-sm text-amber-600">
+            Some items aren't in stock right now. You can still accept: your order waits until they arrive, we'll let
+            you know when they do, and you pay then.
+          </p>
+        </Card>
+      )}
 
       <Card className="mt-6 flex flex-col gap-4 p-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <TotalsSummary totals={displayTotals(quote)} className="text-left" />

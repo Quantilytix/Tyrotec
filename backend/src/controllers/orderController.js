@@ -12,6 +12,7 @@ const { logActivity, logForUser } = require('../services/activityLogService');
 const { friendlyRpcErrorMessage } = require('../utils/rpcErrorMessage');
 const { dbNowMs } = require('../utils/dbClock');
 const { formatCurrency } = require('../utils/formatCurrency');
+const { setStockEta, notifyStockArrivalsSoon } = require('../services/waitingOrderService');
 
 // Adds a seconds_remaining to each stock_reservations row, alongside the raw
 // expires_at, so the frontend counts down a plain relative number instead of
@@ -48,10 +49,13 @@ async function withReservationSecondsRemaining(order) {
 // marking fulfillment ready is a legitimate manual staff action.
 const ORDER_STATUSES = ['pending_approval', 'approved', 'processing', 'completed', 'cancelled', 'ready_for_collection'];
 
+// Orders a customer can pay online: their stock is already set aside.
+const PAYFAST_PAYABLE_STATUSES = ['stock_reserved', 'approved'];
+
 const STATUS_NOTIFICATIONS = {
   approved: (orderNumber) => ({
     title: 'Order approved',
-    message: `Good news, your order #${orderNumber} has been approved. Submit your payment details on the Customer Portal or via WhatsApp ("Submit a payment" from the main menu).`,
+    message: `Good news, your order #${orderNumber} has been approved. Pay now on the Customer Portal with PayFast (card or Instant EFT).`,
   }),
   cancelled: (orderNumber) => ({
     title: 'Order cancelled',
@@ -125,7 +129,7 @@ const exportOrdersAdmin = asyncHandler(async (req, res) => {
 const getOrderById = asyncHandler(async (req, res) => {
   let query = supabase
     .from('orders')
-    .select('*, order_items(*, products(name, sku)), users(email, company_name, full_name, phone, vat_number, address), payments(*), stock_reservations(expires_at)')
+    .select('*, order_items(*, products(name, sku, stock_quantity, lead_time_days)), users(email, company_name, full_name, phone, vat_number, address), payments(*), stock_reservations(expires_at)')
     .eq('id', req.params.id);
 
   if (!isStaff(req.user.role)) {
@@ -186,6 +190,8 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
   } else if (status === 'cancelled') {
     const { error } = await supabase.rpc('cancel_order', { p_order_id: id });
     if (error) return res.status(400).json({ error: friendlyRpcErrorMessage(error.message) });
+    // Stock it returned may have gone to orders that were waiting for it.
+    notifyStockArrivalsSoon();
   } else {
     // e.g. 'processing', 'completed', 'ready_for_collection' -- plain status
     // moves with no stock side effect, routed through the single
@@ -227,21 +233,22 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
   return res.json({ message: 'Order status updated', orderId: id, status });
 });
 
-// Customer only. Order must be theirs and already 'stock_reserved' (set by
-// checkout_quote_with_reservation) -- there's no PayFast payment possible
-// for an order still sitting in the manual pending_approval queue.
+// Customer only. Order must be theirs and have its stock set aside: reserved
+// at checkout ('stock_reserved'), or approved by staff or when stock it was
+// waiting for arrived ('approved'). There's no PayFast payment possible for
+// an order still sitting in the pending_approval queue.
 const initiatePayfastPayment = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
   const { data: order, error } = await supabase
     .from('orders')
-    .select('id, order_number, status, total_amount, customer_id, users(email, company_name)')
+    .select('id, order_number, status, total_amount, customer_id, users(email, company_name), order_items(quantity, products(name))')
     .eq('id', id)
     .eq('customer_id', req.user.id)
     .single();
 
   if (error || !order) return res.status(404).json({ error: 'Order not found' });
-  if (order.status !== 'stock_reserved') {
+  if (!PAYFAST_PAYABLE_STATUSES.includes(order.status)) {
     return res.status(400).json({ error: 'This order is not awaiting PayFast payment.' });
   }
 
@@ -313,7 +320,16 @@ const payOnInvoice = asyncHandler(async (req, res) => {
   return res.json({ orderId: id, status: rows?.[0]?.order_status || 'awaiting_payment' });
 });
 
+// Staff only. Tells the customer of an order waiting for stock when it
+// should arrive, as a number of days from today.
+const updateStockEta = asyncHandler(async (req, res) => {
+  const result = await setStockEta(req.params.id, Number(req.body.days), req.user);
+  if (result.error) return res.status(result.status).json({ error: result.error });
+  return res.json(result);
+});
+
 module.exports = {
+  updateStockEta,
   payOnInvoice,
   getCustomerOrders,
   getAllOrdersAdmin,

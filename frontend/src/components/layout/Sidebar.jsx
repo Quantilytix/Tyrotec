@@ -27,6 +27,7 @@ const STAFF_NAV_ITEMS = [
 ];
 
 const ADMIN_ONLY_NAV_ITEMS = [
+  { to: '/admin/discounts', label: 'Discounts', icon: TagIcon },
   { to: '/admin/opening-stock', label: 'Opening stock', icon: ClipboardIcon },
   { to: '/admin/staff', label: 'Staff', icon: StaffIcon },
   { to: '/admin/activity-log', label: 'Activity log', icon: LogIcon },
@@ -144,6 +145,14 @@ function FactoryIcon(props) {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" {...props}>
       <path d="M3 21V10l6 4V10l6 4V5h6v16H3z" strokeLinecap="round" strokeLinejoin="round" />
       <path d="M7 18h2M12 18h2M17 18h1" strokeLinecap="round" />
+    </svg>
+  );
+}
+function TagIcon(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" {...props}>
+      <path d="M3 12V4h8l10 10-8 8z" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="7.5" cy="8.5" r="1.25" />
     </svg>
   );
 }

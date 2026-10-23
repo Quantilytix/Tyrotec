@@ -1,7 +1,9 @@
 const supabase = require('../config/supabase');
 const { friendlyRpcErrorMessage } = require('../utils/rpcErrorMessage');
+const { notifyStockArrivalsSoon } = require('./waitingOrderService');
 
 const HIGH_VALUE_STATUSES = ['completed', 'confirmed', 'ready_for_collection'];
+const FINISHED_ORDER_STATUSES = ['cancelled', 'completed', 'ready_for_collection'];
 
 function threshold() {
   return Number(process.env.ADMIN_REVIEW_THRESHOLD) || 50000;
@@ -55,7 +57,9 @@ async function listPendingReviews() {
     .order('created_at', { ascending: true });
 
   if (error) throw error;
-  return data;
+  // Nothing to review on an order that's already finished. 039 resolves these
+  // when an order is cancelled; this keeps any left over out of the queue.
+  return (data || []).filter((review) => !FINISHED_ORDER_STATUSES.includes(review.orders?.status));
 }
 
 // action depends on the review's reason -- each branch reuses the existing
@@ -104,6 +108,8 @@ async function resolveReview(reviewId, action, reviewerId) {
     .update({ status: 'resolved', resolved_at: new Date().toISOString(), assigned_to: reviewerId })
     .eq('id', reviewId);
   if (resolveErr) throw resolveErr;
+  // A cancelled order's returned stock may have gone to orders waiting for it.
+  if (['cancel', 'reject'].includes(action)) notifyStockArrivalsSoon();
 
   return { reviewId, action, reason: review.reason, orderId: review.order_id, orderNumber: review.orders?.order_number };
 }

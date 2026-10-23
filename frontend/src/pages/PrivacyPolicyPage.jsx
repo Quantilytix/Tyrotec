@@ -6,6 +6,10 @@ const UL = 'mt-3 list-disc space-y-2 pl-5 text-sm leading-relaxed text-slate-600
 
 // Standalone layout on purpose -- AuthLayout's narrow card + looping video
 // background is built for a short login form, not a long-form document.
+//
+// LAST_UPDATED is a fixed date on purpose: change it whenever the wording
+// changes, so customers can tell when the policy last moved.
+const LAST_UPDATED = '23 October 2026';
 // [CONTACT EMAIL] is a placeholder: confirm the real public support/privacy
 // contact address before this goes live -- see the note left for the user
 // in chat.
@@ -19,7 +23,7 @@ export default function PrivacyPolicyPage() {
 
         <h1 className="mt-4 font-display text-2xl font-semibold text-ink">Privacy Policy</h1>
         <p className="mt-2 text-sm text-slate-500">
-          Last updated: {new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}
+          Last updated: {LAST_UPDATED}
         </p>
 
         <p className={P}>
@@ -48,10 +52,16 @@ export default function PrivacyPolicyPage() {
             same account.
           </li>
           <li>
-            <strong>Transaction information:</strong> the products, quotes, orders, and payment details (method,
-            reference number, amount) you submit through the portal or WhatsApp. We do not process card payments
-            ourselves or store full banking details. Payments are bank transfers/EFT that our staff verify
-            manually against a bank statement.
+            <strong>Transaction information:</strong> the products, quotes, and orders you place through the portal
+            or WhatsApp, and the details of how each order was paid (method, payment reference, amount, date and
+            status).
+          </li>
+          <li>
+            <strong>Payments:</strong> online payments are made on PayFast&apos;s secure payment page, by card or
+            Instant EFT. Your card or bank login details are entered with PayFast, not with us, and we never see or
+            store them. PayFast tells us whether the payment succeeded, with its reference and the amount. If you pay
+            us another way (for example a bank transfer or cash we have agreed with you), our staff record that
+            payment against your order once they have confirmed it.
           </li>
           <li>
             <strong>Google account information:</strong> if you sign in with Google, we receive your name and email
@@ -79,7 +89,8 @@ export default function PrivacyPolicyPage() {
           <li>Create and manage your account, and verify who you are when you sign in;</li>
           <li>Let you browse our catalog and build, submit, and track quotes and orders;</li>
           <li>Let you order via WhatsApp and recognize you across both channels;</li>
-          <li>Review and confirm the payments you submit;</li>
+          <li>Take payment for your orders through PayFast and confirm when it has been received;</li>
+          <li>Keep our accounting and tax records, including invoices and receipts for your orders;</li>
           <li>Send you notifications about your quotes, orders, and payments (in-app and by email);</li>
           <li>Keep our product catalog accurate and stock levels up to date;</li>
           <li>Maintain the security of the portal and investigate misuse.</li>
@@ -101,6 +112,15 @@ export default function PrivacyPolicyPage() {
           </li>
           <li>
             <strong>Render</strong>: hosts our backend server.
+          </li>
+          <li>
+            <strong>PayFast</strong>: processes online payments. When you choose to pay, PayFast receives your name,
+            email address, order number, the items and the amount, so it can take the payment and send you its own
+            confirmation.
+          </li>
+          <li>
+            <strong>QX</strong>: our accounting system. Your customer details, quotes, orders and payments are sent to
+            it so we can issue invoices and keep our books.
           </li>
           <li>
             <strong>Meta (WhatsApp Business Platform)</strong>: delivers and receives WhatsApp messages when you

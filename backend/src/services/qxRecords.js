@@ -6,6 +6,8 @@
 // prices_include_vat false -- except legacy quotes/orders priced before VAT
 // was split out (subtotal_amount is null), whose prices already include it.
 
+const { discountLabel } = require('../utils/discounts');
+
 const TIMEZONE = 'Africa/Johannesburg';
 
 // A timestamp as the calendar date it was in South Africa ('YYYY-MM-DD').
@@ -55,11 +57,16 @@ function productRecord(product) {
   };
 }
 
+// unit_price is what the customer pays, after any discount (038); the
+// description says what the discount was.
 function documentLines(items, legacyVatInclusive) {
   return (items || []).map((item) => ({
     product_id: item.product_id,
     name: item.product?.name || null,
-    description: item.product ? `${item.product.sku} – ${item.product.name}` : null,
+    description: item.product
+      ? `${item.product.sku} – ${item.product.name}` +
+        (item.discount_percent ? ` (${discountLabel(item.discount_percent, item.discount_reason)}, was ${num(item.list_price)})` : '')
+      : null,
     quantity: item.quantity,
     unit_price: num(item.unit_price),
     // Legacy lines carry no rate; their price includes 15% VAT.

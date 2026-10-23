@@ -6,6 +6,8 @@ import { createQuote } from '../api/quotes';
 import { formatCurrency } from '../utils/formatters';
 import { lineTotals, vatRateLabel } from '../utils/vat';
 import { downloadQuotePdf } from '../utils/generateQuotePdf';
+import { availabilityNote } from '../utils/availability';
+import DiscountNote from '../components/ui/DiscountNote';
 import Button from '../components/ui/Button';
 import EmptyState from '../components/ui/EmptyState';
 import Card from '../components/ui/Card';
@@ -17,6 +19,10 @@ export default function CartPage() {
   const navigate = useNavigate();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+
+  const hasShortItems = items.some(
+    (i) => i.stock_quantity !== undefined && availabilityNote(i.stock_quantity, i.quantity, i.lead_time_days)
+  );
 
   const handleSubmit = async () => {
     setError('');
@@ -66,6 +72,12 @@ export default function CartPage() {
       <p className="mt-1 text-sm text-slate-500">
         Review your items, then request a quote. You confirm the order from the quote.
       </p>
+      {hasShortItems && (
+        <p className="mt-2 text-sm text-amber-600">
+          Some items aren't in stock right now. You can still request the quote: if you order, your order waits until
+          they arrive and you pay then.
+        </p>
+      )}
 
       <Card className="mt-6 overflow-x-auto">
         <table className="w-full min-w-[640px] text-sm">
@@ -85,6 +97,13 @@ export default function CartPage() {
                 <td className="px-4 py-3">
                   <p className="font-medium text-ink">{item.name}</p>
                   <p className="font-mono text-xs text-slate-400">{item.sku}</p>
+                  <DiscountNote line={item} />
+                  {item.stock_quantity !== undefined &&
+                    availabilityNote(item.stock_quantity, item.quantity, item.lead_time_days) && (
+                      <p className="mt-1 text-xs text-amber-600">
+                        {availabilityNote(item.stock_quantity, item.quantity, item.lead_time_days)}
+                      </p>
+                    )}
                 </td>
                 <td className="px-4 py-3 font-mono text-ink">{formatCurrency(item.unit_price)}</td>
                 <td className="px-4 py-3">

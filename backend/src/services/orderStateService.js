@@ -20,7 +20,9 @@ const supabase = require('../config/supabase');
 // place and both can produce a receipt.
 const ORDER_TRANSITIONS = {
   pending_approval: ['approved', 'cancelled'],
-  approved: ['confirmed', 'processing', 'cancelled'],
+  // 'awaiting_payment': an approved order's customer chose to be invoiced
+  // (switch_order_to_invoice, 037).
+  approved: ['confirmed', 'processing', 'awaiting_payment', 'cancelled'],
   processing: ['completed', 'cancelled'],
   // 'awaiting_payment' here is the customer choosing to be invoiced
   // instead of paying online (switch_order_to_invoice), which also drops the
@@ -59,14 +61,21 @@ async function transitionOrderStatus(orderId, newStatus) {
     return { error: `Cannot move order from "${order.status}" to "${newStatus}".`, status: 400 };
   }
 
+  // Only if the status is still the one checked above. Without this, a
+  // PayFast confirmation racing the reservation-expiry job could mark an
+  // order paid just after the job cancelled it and released its stock.
   const { data: updated, error } = await supabase
     .from('orders')
     .update({ status: newStatus, updated_at: new Date().toISOString() })
     .eq('id', orderId)
+    .eq('status', order.status)
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) throw error;
+  if (!updated) {
+    return { error: 'This order changed while it was being updated. Reload it and try again.', status: 409 };
+  }
   return { order: updated };
 }
 

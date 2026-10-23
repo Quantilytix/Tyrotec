@@ -47,6 +47,19 @@ describe('qxRecords', () => {
     expect(legacy.lines[0].vat_rate).toBe(15);
   });
 
+  it('a discounted line is sent at the price paid, with the discount in its description', () => {
+    const quote = {
+      quote_number: 1002, created_at: '2026-10-01T08:00:00Z', status: 'submitted', customer_id: 'c1', subtotal_amount: '850',
+      quote_items: [{
+        product_id: 'p1', quantity: 1, unit_price: '850', vat_rate: '15', list_price: '1000',
+        discount_percent: '15', discount_reason: 'Clearance', product: { sku: 'HV', name: 'Valve' },
+      }],
+    };
+    expect(records.quoteRecord(quote).lines[0]).toMatchObject({
+      unit_price: 850, description: 'HV – Valve (15% off: Clearance, was 1000)',
+    });
+  });
+
   it('order: dated the day it became a sale, else the day it was placed', () => {
     const order = { order_number: 7, quote_id: 'q', customer_id: 'c', status: 'approved', subtotal_amount: 10, total_amount: 11.5,
       created_at: '2026-10-28T08:00:00Z', committed_at: '2026-11-03T09:00:00Z', order_items: [] };

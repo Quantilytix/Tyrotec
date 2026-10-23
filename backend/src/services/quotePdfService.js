@@ -4,6 +4,7 @@ const { jsPDF } = require('jspdf');
 const autoTable = require('jspdf-autotable').default;
 const { formatCurrency } = require('../utils/formatCurrency');
 const { displayTotals, lineTotals, VAT_RATE } = require('../utils/vat');
+const { discountLabel } = require('../utils/discounts');
 
 // Same layout as the portal's own "Download quote" feature
 // (frontend/src/utils/generateQuotePdf.js -- keep the two in sync), adapted
@@ -322,7 +323,11 @@ function generateQuotePdfBuffer({ quote, items, customer, channel = 'WhatsApp' }
     startY: Math.max(leftPanelY, rightPanelY) + 6,
     head: [['Product', 'SKU', 'Unit Price', 'Qty', 'VAT', 'Line Total']],
     body: items.map((item) => [
-      item.products?.name || '',
+      // A discounted line says so under the name, with the original price.
+      item.discount_percent
+        ? `${item.products?.name || ''}
+${discountLabel(item.discount_percent, item.discount_reason)} (was ${formatCurrency(item.list_price)})`
+        : item.products?.name || '',
       item.products?.sku || '',
       formatCurrency(item.unit_price),
       String(item.quantity),

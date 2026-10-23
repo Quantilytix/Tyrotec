@@ -10,6 +10,7 @@ const {
   initiatePayfastPayment,
   getOrderStatus,
   payOnInvoice,
+  updateStockEta,
 } = require('../controllers/orderController');
 const { authenticateToken, requireRole } = require('../middleware/auth');
 const validate = require('../middleware/validate');
@@ -29,6 +30,16 @@ router.patch(
   body('status').isString().notEmpty(),
   validate,
   updateOrderStatus
+);
+
+// Staff tell the customer when stock for a waiting order should arrive.
+router.patch(
+  '/:id/stock-eta',
+  authenticateToken,
+  requireRole(['admin', 'sales_rep']),
+  body('days').isInt({ min: 0, max: 365 }),
+  validate,
+  updateStockEta
 );
 
 module.exports = router;

@@ -132,6 +132,26 @@ describe('payfastService', () => {
       expect(fields.signature).toHaveLength(32); // md5 hex digest
     });
 
+    it('describes what is being paid for, signed with the rest of the fields', () => {
+      const { buildCheckoutFields, verifyItnSignature } = require('../payfastService');
+      const order = {
+        id: 'order-1', order_number: 7, total_amount: 100,
+        order_items: [{ quantity: 2, products: { name: 'Waiting Valve' } }, { quantity: 1, products: { name: 'Pump' } }],
+      };
+      const { fields } = buildCheckoutFields(order, { email: 'c@example.com' });
+      expect(fields.item_description).toBe('2 x Waiting Valve, 1 x Pump');
+      expect(verifyItnSignature(fields)).toBe(true);
+    });
+
+    it('leaves item_description out when the order has no lines, and cuts a long one to 255 characters', () => {
+      const { buildCheckoutFields, itemDescription } = require('../payfastService');
+      const { fields } = buildCheckoutFields({ id: 'o', order_number: 1, total_amount: 1 }, { email: 'c@example.com' });
+      expect('item_description' in fields).toBe(false);
+      const long = itemDescription(Array.from({ length: 40 }, (_, i) => ({ quantity: 1, products: { name: `Product number ${i}` } })));
+      expect(long).toHaveLength(255);
+      expect(long.endsWith('...')).toBe(true);
+    });
+
     it('falls back to email for name_first when the customer has no company_name', () => {
       const { buildCheckoutFields } = require('../payfastService');
       const { fields } = buildCheckoutFields(
