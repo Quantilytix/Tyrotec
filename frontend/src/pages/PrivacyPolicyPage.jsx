@@ -9,7 +9,7 @@ const UL = 'mt-3 list-disc space-y-2 pl-5 text-sm leading-relaxed text-slate-600
 //
 // LAST_UPDATED is a fixed date on purpose: change it whenever the wording
 // changes, so customers can tell when the policy last moved.
-const LAST_UPDATED = '23 October 2026';
+const LAST_UPDATED = '27 October 2026';
 // [CONTACT EMAIL] is a placeholder: confirm the real public support/privacy
 // contact address before this goes live -- see the note left for the user
 // in chat.
@@ -72,6 +72,11 @@ export default function PrivacyPolicyPage() {
             ordering service, so we can respond to and process your requests.
           </li>
           <li>
+            <strong>Help questions:</strong> the questions you type on the Help page, and the answers given, so they
+            can be answered. We don&apos;t save them: the conversation stays in your browser tab and is gone when you
+            close it. Please don&apos;t include personal or payment details in your questions.
+          </li>
+          <li>
             <strong>Staff-uploaded documents:</strong> when staff use the product-import tool, files they upload
             (supplier receipts or spreadsheets) are processed to extract product information. This is an internal
             staff tool. Customers do not upload documents through it.
@@ -92,6 +97,7 @@ export default function PrivacyPolicyPage() {
           <li>Take payment for your orders through PayFast and confirm when it has been received;</li>
           <li>Keep our accounting and tax records, including invoices and receipts for your orders;</li>
           <li>Send you notifications about your quotes, orders, and payments (in-app and by email);</li>
+          <li>Answer the questions you ask on the Help page;</li>
           <li>Keep our product catalog accurate and stock levels up to date;</li>
           <li>Maintain the security of the portal and investigate misuse.</li>
         </ul>
@@ -127,8 +133,10 @@ export default function PrivacyPolicyPage() {
             use WhatsApp ordering.
           </li>
           <li>
-            <strong>Google</strong>: provides Google Sign-In (if you use it) and the AI model used by staff's
-            internal product-import tool.
+            <strong>Google</strong>: provides Google Sign-In (if you use it), and the Gemini AI model that answers
+            questions on the Help page and is used by staff&apos;s internal product-import tool. When you ask a Help
+            question, Google receives the text of your conversation, but not your name, email address or account
+            details.
           </li>
           <li>
             Our email provider: sends account and order notification emails.
@@ -168,7 +176,8 @@ export default function PrivacyPolicyPage() {
         <h2 className={H2}>8. Cookies and local storage</h2>
         <p className={P}>
           The portal stores a login session token in your browser's local storage so you stay signed in between
-          visits. We don't use third-party advertising or analytics tracking cookies.
+          visits, and keeps your Help conversation in the browser tab&apos;s session storage until you close the tab.
+          We don't use third-party advertising or analytics tracking cookies.
         </p>
 
         <h2 className={H2}>9. Children's privacy</h2>
