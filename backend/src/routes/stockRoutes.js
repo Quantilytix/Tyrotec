@@ -3,6 +3,7 @@ const router = express.Router();
 const {
   listAdjustments,
   createAdjustment,
+  createCorrection,
   getOpeningStock,
   createOpeningStock,
 } = require('../controllers/stockController');
@@ -12,6 +13,8 @@ const { authenticateToken, requireRole } = require('../middleware/auth');
 // what the stock is worth in the books, so they're admin decisions.
 router.get('/adjustments', authenticateToken, requireRole(['admin', 'sales_rep']), listAdjustments);
 router.post('/adjustments', authenticateToken, requireRole(['admin']), createAdjustment);
+// Admin: put a product's stock and/or average cost right after a mistake.
+router.post('/corrections', authenticateToken, requireRole(['admin']), createCorrection);
 router.get('/opening', authenticateToken, requireRole(['admin']), getOpeningStock);
 router.post('/opening', authenticateToken, requireRole(['admin']), createOpeningStock);
 

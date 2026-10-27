@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Button from '../ui/Button';
 import CategorySelect from './CategorySelect';
+import StockCostCorrection from './StockCostCorrection';
 import { uploadProductImage } from '../../api/products';
 import { getSuppliers } from '../../api/suppliers';
 import { formatCurrency } from '../../utils/formatters';
@@ -25,7 +26,9 @@ const FIELD_CLASS =
   'mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none transition-colors duration-150 focus:border-teal-500';
 const LABEL_CLASS = 'block text-xs font-medium text-slate-600';
 
-export default function ProductForm({ initialProduct, onSubmit, onCancel, categories = [], onCreateCategory }) {
+export default function ProductForm({
+  initialProduct, onSubmit, onCancel, categories = [], onCreateCategory, canCorrectStock = false, onStockCorrected,
+}) {
   const [form, setForm] = useState(() =>
     initialProduct
       ? {
@@ -158,23 +161,17 @@ export default function ProductForm({ initialProduct, onSubmit, onCancel, catego
             Add 15% VAT to this product
           </label>
         </div>
-        {/* Stock and cost are read-only here: stock arrives through Purchases and
-            is corrected with an adjustment, and the cost is the average those
-            purchases work out. */}
+        {/* Stock arrives through Purchases and the cost is the average those
+            purchases work out. Admins can correct either here when a mistake
+            was made; it's saved as a recorded correction, not with the form. */}
         <div>
           <p className={LABEL_CLASS}>Stock and cost</p>
           {initialProduct ? (
-            <div className="mt-1 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
-              <p>
-                <span className="font-medium text-ink">{initialProduct.stock_quantity}</span> in stock
-              </p>
-              <p className="mt-0.5">
-                Average cost{' '}
-                <span className="font-medium text-ink">
-                  {initialProduct.supplier_cost != null ? formatCurrency(initialProduct.supplier_cost) : 'not known yet'}
-                </span>
-              </p>
-            </div>
+            <StockCostCorrection
+              product={initialProduct}
+              canCorrect={canCorrectStock}
+              onCorrected={onStockCorrected}
+            />
           ) : (
             <p className="mt-1 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
               New products start with no stock. Add it by recording a purchase.

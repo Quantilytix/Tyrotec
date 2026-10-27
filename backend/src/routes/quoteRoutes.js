@@ -14,6 +14,7 @@ const {
   convertQuoteToOrderAdmin,
   checkoutQuoteFast,
   refreshQuote,
+  editQuote,
 } = require('../controllers/quoteController');
 const { authenticateToken, requireRole } = require('../middleware/auth');
 const validate = require('../middleware/validate');
@@ -22,6 +23,10 @@ const createQuoteRules = [
   body('items').isArray({ min: 1 }).withMessage('At least one item is required'),
   body('items.*.product_id').isUUID().withMessage('Each item needs a valid product_id'),
   body('items.*.quantity').isInt({ min: 1 }).withMessage('Each item needs a quantity of at least 1'),
+  // Staff only (quoteService.js ignores them for customers): a line's own discount.
+  body('items.*.discount_percent').optional({ values: 'falsy' }).isFloat({ min: 0, max: 99.99 })
+    .withMessage('A discount must be from 0% to less than 100%'),
+  body('items.*.discount_reason').optional({ values: 'null' }).isString().isLength({ max: 200 }),
 ];
 
 const createQuoteForCustomerRules = [
@@ -65,6 +70,9 @@ router.post(
   convertQuoteToOrderAdmin
 );
 router.post('/:quoteId/checkout', authenticateToken, checkoutQuoteFast);
+// Change a quote's products and quantities before it's ordered: the customer
+// for their own quote, staff for any (quoteController.js's editQuote).
+router.put('/:quoteId/items', authenticateToken, createQuoteRules, validate, editQuote);
 // Same products at today's prices, replacing a quote that can't be accepted.
 router.post('/:quoteId/refresh', authenticateToken, refreshQuote);
 

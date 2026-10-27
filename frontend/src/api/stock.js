@@ -6,6 +6,10 @@ export const getStockAdjustments = ({ productId, page = 1, limit = 20 } = {}) =>
 // Admin only.
 export const createStockAdjustment = (adjustment) => apiClient.post('/stock/adjustments', adjustment);
 
+// Admin: put a product's stock and/or average cost right after a mistake.
+// { product_id, stock_quantity, supplier_cost, note } -- blank means leave as is.
+export const correctStockAndCost = (correction) => apiClient.post('/stock/corrections', correction);
+
 // Admin only. Recorded once, at go-live.
 export const getOpeningStock = () => apiClient.get('/stock/opening');
 

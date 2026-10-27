@@ -35,6 +35,7 @@ import AdminActivityLogPage from './pages/admin/AdminActivityLogPage';
 import AdminReviewsPage from './pages/admin/AdminReviewsPage';
 import AdminSuppliersPage from './pages/admin/AdminSuppliersPage';
 import AdminDiscountsPage from './pages/admin/AdminDiscountsPage';
+import HelpPage from './pages/HelpPage';
 import AdminPurchasesPage from './pages/admin/AdminPurchasesPage';
 import AdminNewPurchasePage from './pages/admin/AdminNewPurchasePage';
 import AdminPurchaseDetailPage from './pages/admin/AdminPurchaseDetailPage';
@@ -89,6 +90,7 @@ export default function App() {
               <Route path="/orders" element={<OrdersPage />} />
               <Route path="/orders/:id" element={<OrderDetailPage />} />
               <Route path="/notifications" element={<NotificationsPage />} />
+              <Route path="/help" element={<HelpPage />} />
               <Route path="/profile" element={<Profile />} />
             </Route>
 

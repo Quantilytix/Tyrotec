@@ -11,6 +11,7 @@ import Card from '../../components/ui/Card';
 import TotalsSummary from '../../components/ui/TotalsSummary';
 import Modal from '../../components/ui/Modal';
 import QuoteCreatedModal from '../../components/admin/QuoteCreatedModal';
+import { staffDiscountedPrice } from '../../utils/discounts';
 
 const SEARCH_INPUT_CLASS =
   'w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none transition-colors duration-150 focus:border-teal-500';
@@ -37,6 +38,8 @@ export default function AdminNewQuotePage() {
   const [allProducts, setAllProducts] = useState([]);
 
   const [items, setItems] = useState([]);
+  // Shown to the customer on every line given a staff discount.
+  const [discountReason, setDiscountReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [created, setCreated] = useState(null);
   const [error, setError] = useState('');
@@ -128,9 +131,12 @@ export default function AdminNewQuotePage() {
           product_id: product.id,
           name: product.name,
           sku: product.sku,
-          unit_price: product.unit_price,
+          // The normal price, and the price today (a catalogue discount, if any).
+          list_price: Number(product.unit_price),
+          catalogue_price: product.discount ? product.discount.price : Number(product.unit_price),
           vat_rate: rateForProduct(product),
           quantity: 1,
+          discount_percent: '',
         },
       ];
     });
@@ -144,9 +150,24 @@ export default function AdminNewQuotePage() {
 
   const removeItem = (productId) => setItems((prev) => prev.filter((i) => i.product_id !== productId));
 
-  // Preview only -- the server prices the quote again from the product
-  // records when it is created.
-  const totals = documentTotals(items);
+  const updateDiscount = (productId, value) =>
+    setItems((prev) => prev.map((i) => (i.product_id === productId ? { ...i, discount_percent: value } : i)));
+
+  // Each line as it will be priced: a staff discount comes off the normal
+  // price and replaces any catalogue discount. Preview only -- the server
+  // prices the quote again when it is created.
+  const priced = items.map((i) => {
+    const pct = Number(i.discount_percent);
+    const staff = pct > 0 && pct < 100;
+    return {
+      ...i,
+      unit_price: staff ? staffDiscountedPrice(i.list_price, pct) : i.catalogue_price,
+      discount_percent: staff ? pct : null,
+      discount_reason: staff ? discountReason.trim() || 'Staff discount' : null,
+    };
+  });
+  const badDiscount = items.some((i) => i.discount_percent !== '' && !(Number(i.discount_percent) >= 0 && Number(i.discount_percent) < 100));
+  const totals = documentTotals(priced);
 
   const handleEmailCreated = async () => {
     const { data } = await sendQuoteEmailAdmin(created.quoteId);
@@ -157,7 +178,7 @@ export default function AdminNewQuotePage() {
   // has just been created from exactly these lines.
   const handleDownloadCreated = () =>
     downloadQuotePdf({
-      items,
+      items: priced,
       totals,
       customer: selectedCustomer,
       quoteNumber: created.quoteNumber,
@@ -169,7 +190,12 @@ export default function AdminNewQuotePage() {
     setError('');
     setSubmitting(true);
     try {
-      const payload = items.map((i) => ({ product_id: i.product_id, quantity: i.quantity }));
+      const payload = priced.map((i) => ({
+        product_id: i.product_id,
+        quantity: i.quantity,
+        discount_percent: i.discount_percent,
+        discount_reason: i.discount_reason,
+      }));
       const { data } = await createQuoteForCustomerAdmin(selectedCustomer.id, payload);
       setCreated({ ...data, total_amount: totals.total_amount });
     } catch (err) {
@@ -393,6 +419,7 @@ export default function AdminNewQuotePage() {
                 <tr>
                   <th className="py-2">Product</th>
                   <th className="py-2">Unit price (excl. VAT)</th>
+                  <th className="py-2">Discount %</th>
                   <th className="py-2">Quantity</th>
                   <th className="py-2">VAT</th>
                   <th className="py-2">Line total (excl. VAT)</th>
@@ -400,13 +427,31 @@ export default function AdminNewQuotePage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {items.map((item) => (
+                {priced.map((item) => (
                   <tr key={item.product_id}>
                     <td className="py-2">
                       <p className="font-medium text-ink">{item.name}</p>
                       <p className="font-mono text-xs text-slate-400">{item.sku}</p>
                     </td>
-                    <td className="py-2 font-mono text-ink">{formatCurrency(item.unit_price)}</td>
+                    <td className="py-2 font-mono text-ink">
+                      {formatCurrency(item.unit_price)}
+                      {item.unit_price !== item.list_price && (
+                        <span className="ml-1 text-xs text-slate-400 line-through">{formatCurrency(item.list_price)}</span>
+                      )}
+                    </td>
+                    <td className="py-2">
+                      <input
+                        type="number"
+                        min={0}
+                        max={99.99}
+                        step="0.01"
+                        value={items.find((i) => i.product_id === item.product_id)?.discount_percent ?? ''}
+                        onChange={(e) => updateDiscount(item.product_id, e.target.value)}
+                        placeholder="0"
+                        aria-label={`Discount for ${item.name}`}
+                        className="w-20 rounded-lg border border-slate-200 px-2 py-1 text-sm outline-none transition-colors duration-150 focus:border-teal-500"
+                      />
+                    </td>
                     <td className="py-2">
                       <input
                         type="number"
@@ -432,6 +477,22 @@ export default function AdminNewQuotePage() {
                 ))}
               </tbody>
             </table>
+            {priced.some((i) => i.discount_percent) && (
+              <div className="mt-3 max-w-md">
+                <label htmlFor="discount-reason" className="block text-xs font-medium text-slate-600">
+                  Discount reason (the customer sees this)
+                </label>
+                <input
+                  id="discount-reason"
+                  value={discountReason}
+                  onChange={(e) => setDiscountReason(e.target.value)}
+                  maxLength={200}
+                  placeholder="Staff discount"
+                  className={`${SEARCH_INPUT_CLASS} mt-1`}
+                />
+              </div>
+            )}
+            {badDiscount && <p className="mt-2 text-sm text-bad-500">A discount must be from 0% to less than 100%.</p>}
           </div>
         )}
       </Card>
@@ -443,7 +504,7 @@ export default function AdminNewQuotePage() {
           <Button
             onClick={handleSubmit}
             loading={submitting}
-            disabled={!selectedCustomer || items.length === 0}
+            disabled={!selectedCustomer || items.length === 0 || badDiscount}
           >
             Create quote
           </Button>

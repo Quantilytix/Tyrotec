@@ -24,6 +24,10 @@ export const checkoutQuoteFast = (quoteId) =>
 // (a discount it was priced with has ended). Returns { quoteId }.
 export const refreshQuote = (quoteId) => apiClient.post(`/quotes/${quoteId}/refresh`);
 
+// Replace a quote's products and quantities before it's ordered; the server
+// prices it again at today's prices. items: [{ product_id, quantity }]
+export const editQuoteItems = (quoteId, items) => apiClient.put(`/quotes/${quoteId}/items`, { items });
+
 export const getAllQuotesAdmin = () => apiClient.get('/quotes/admin/all');
 
 export const updateQuoteStatus = (quoteId, status) =>

@@ -3,7 +3,9 @@ const asyncHandler = require('../utils/asyncHandler');
 const { logForUser } = require('../services/activityLogService');
 const { formatCurrency } = require('../utils/formatCurrency');
 const { notifyIfLowStockCrossing } = require('./productController');
-const { validateAdjustmentInput, adjustStock, recordOpeningStock } = require('../services/stockService');
+const {
+  validateAdjustmentInput, adjustStock, recordOpeningStock, validateCorrectionInput, correctStockAndCost,
+} = require('../services/stockService');
 const { notifyStockArrivalsSoon } = require('../services/waitingOrderService');
 
 const REASON_LABELS = {
@@ -65,6 +67,38 @@ const createAdjustment = asyncHandler(async (req, res) => {
   return res.status(201).json({ ...adjustment, product: product ? { sku: product.sku, name: product.name } : null });
 });
 
+// Admin. Puts a product's stock and/or average cost right when a mistake was
+// made, from the product form. The stock change is a recorded count
+// correction; the cost change is recorded here in the activity log.
+const createCorrection = asyncHandler(async (req, res) => {
+  const { value, error: invalid } = validateCorrectionInput(req.body);
+  if (invalid) return res.status(400).json({ error: invalid });
+
+  const outcome = await correctStockAndCost(value, req.user.id);
+  if (outcome.error) return res.status(outcome.status).json({ error: outcome.error });
+  const r = outcome.result;
+
+  const { data: product } = await supabase.from('products').select('*').eq('id', value.product_id).single();
+  if (r.stock_after > r.stock_before) notifyStockArrivalsSoon();
+  if (product && r.stock_after !== r.stock_before) await notifyIfLowStockCrossing(r.stock_before, product);
+
+  const changes = [];
+  if (r.stock_after !== r.stock_before) changes.push(`stock ${r.stock_before} -> ${r.stock_after}`);
+  if (Number(r.cost_after) !== Number(r.cost_before)) {
+    changes.push(`average cost ${r.cost_before == null ? 'not set' : formatCurrency(r.cost_before)} -> ${formatCurrency(r.cost_after)}`);
+  }
+  if (changes.length) {
+    await logForUser(req.user, {
+      action: 'stock.corrected',
+      entityType: 'product',
+      entityId: value.product_id,
+      description: `Corrected ${product?.name ?? 'product'} (${product?.sku ?? ''}): ${changes.join('; ')}. Note: ${value.note}.`,
+    });
+  }
+
+  return res.json({ ...r, changed: changes.length > 0, product });
+});
+
 // Admin. Whether opening stock has been recorded, and if not, what it would
 // include and which products still need a cost first.
 const getOpeningStock = asyncHandler(async (req, res) => {
@@ -103,4 +137,4 @@ const createOpeningStock = asyncHandler(async (req, res) => {
   return res.status(201).json(data);
 });
 
-module.exports = { listAdjustments, createAdjustment, getOpeningStock, createOpeningStock, REASON_LABELS };
+module.exports = { listAdjustments, createAdjustment, getOpeningStock, createOpeningStock, REASON_LABELS, createCorrection };

@@ -121,6 +121,11 @@ const STAFF_READABLE = [
   /^Opening stock has already been recorded$/,
   /^These products have stock but no cost: /,
   /^The change must be /,
+  /^Say why you are making this correction$/,
+  /^Stock can't be below 0$/,
+  /^The average cost can't be below 0$/,
+  /has no average cost yet\. Enter it as well\.$/,
+  /^Product not found$/,
 ];
 
 function friendlyStockError(error) {
@@ -159,6 +164,43 @@ async function adjustStock(input, userId) {
   return { id: data };
 }
 
+// A correction to a product's stock and/or average cost, made from the product
+// form when a mistake slipped through (041_correct_stock_and_cost.sql). Blank
+// means "leave as it is"; a note saying why is required.
+function validateCorrectionInput(body = {}) {
+  const productId = String(body.product_id || '').trim();
+  const blank = (v) => v === undefined || v === null || v === '';
+  const stock = blank(body.stock_quantity) ? null : Number(body.stock_quantity);
+  const cost = blank(body.supplier_cost) ? null : Number(body.supplier_cost);
+  const note = String(body.note || '').trim();
+  if (!productId) return { error: 'Choose the product.' };
+  if (stock === null && cost === null) return { error: 'Enter the correct stock or average cost.' };
+  if (stock !== null && (!Number.isInteger(stock) || stock < 0)) return { error: 'Stock must be a whole number, 0 or more.' };
+  if (cost !== null && (!Number.isFinite(cost) || cost < 0)) return { error: 'The average cost must be 0 or more.' };
+  if (!note) return { error: 'Say why you are making this correction.' };
+  if (note.length > 500) return { error: 'Keep the note under 500 characters.' };
+  return {
+    value: {
+      product_id: productId,
+      stock_quantity: stock,
+      supplier_cost: cost === null ? null : Math.round(cost * 100) / 100,
+      note,
+    },
+  };
+}
+
+async function correctStockAndCost(value, userId) {
+  const { data, error } = await supabase.rpc('correct_stock_and_cost', {
+    p_product_id: value.product_id,
+    p_new_stock: value.stock_quantity,
+    p_new_cost: value.supplier_cost,
+    p_note: value.note,
+    p_created_by: userId,
+  });
+  if (error) return { error: friendlyStockError(error), status: 400 };
+  return { result: data };
+}
+
 async function recordOpeningStock({ as_of_date: asOfDate, costs }, userId) {
   if (!isDate(asOfDate)) return { error: 'Enter the date the stock count applies to.', status: 400 };
   const { data, error } = await supabase.rpc('record_opening_stock', {
@@ -176,6 +218,8 @@ module.exports = {
   publicProductView,
   validatePurchaseInput,
   validateAdjustmentInput,
+  validateCorrectionInput,
+  correctStockAndCost,
   friendlyStockError,
   receivePurchase,
   adjustStock,

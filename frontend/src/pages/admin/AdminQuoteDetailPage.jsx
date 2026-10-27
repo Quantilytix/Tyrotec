@@ -11,6 +11,7 @@ import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import Card from '../../components/ui/Card';
 import TotalsSummary from '../../components/ui/TotalsSummary';
 import DiscountNote from '../../components/ui/DiscountNote';
+import QuoteItemsEditor from '../../components/QuoteItemsEditor';
 
 export default function AdminQuoteDetailPage() {
   const { quoteId } = useParams();
@@ -26,6 +27,8 @@ export default function AdminQuoteDetailPage() {
   const [converting, setConverting] = useState(false);
   const [showConvertConfirm, setShowConvertConfirm] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [savedNote, setSavedNote] = useState('');
 
   const load = () => getQuoteById(quoteId).then(({ data }) => setQuote(data));
 
@@ -150,6 +153,21 @@ export default function AdminQuoteDetailPage() {
         <StatusBadge status={quote.status} />
       </div>
 
+      {savedNote && <p className="mt-4 rounded-lg bg-good-50 px-3 py-2 text-sm text-good-500">{savedNote}</p>}
+
+      {editing ? (
+        <QuoteItemsEditor
+          quote={quote}
+          staff
+          onSaved={async () => {
+            await load();
+            setEditing(false);
+            setSavedNote('Quote updated at today\u2019s prices. The customer has been notified.');
+          }}
+          onCancel={() => setEditing(false)}
+        />
+      ) : (
+      <>
       <Card className="mt-6 overflow-x-auto">
         <table className="w-full min-w-[640px] text-sm">
           <thead className="border-b border-slate-100 bg-slate-50 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
@@ -194,6 +212,11 @@ export default function AdminQuoteDetailPage() {
           <Button variant="secondary" onClick={handleEmail} loading={sending} disabled={!quote.users?.email}>
             {emailedTo ? 'Send again' : 'Email to customer'}
           </Button>
+          {['draft', 'submitted'].includes(quote.status) && (
+            <Button variant="secondary" onClick={() => { setSavedNote(''); setEditing(true); }}>
+              Edit quote
+            </Button>
+          )}
           {canExpire && (
             <Button variant="danger" onClick={() => setShowVoidConfirm(true)} loading={updating}>
               Void quote
@@ -211,6 +234,8 @@ export default function AdminQuoteDetailPage() {
           )}
         </div>
       </Card>
+      </>
+      )}
 
       {showConvertConfirm && (
         <ConfirmDialog

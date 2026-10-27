@@ -10,6 +10,7 @@ import Spinner from '../components/ui/Spinner';
 import EmptyState from '../components/ui/EmptyState';
 import Card from '../components/ui/Card';
 import ProductImageViewer, { PlaceholderIcon } from '../components/ui/ProductImageViewer';
+import Pagination from '../components/ui/Pagination';
 
 export default function ProductsPage() {
   const [products, setProducts] = useState([]);
@@ -266,19 +267,7 @@ export default function ProductsPage() {
             })}
           </div>
 
-          {totalPages > 1 && (
-            <div className="mt-6 flex items-center justify-center gap-3">
-              <Button variant="secondary" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-                Previous
-              </Button>
-              <span className="text-sm text-slate-500">
-                Page {page} of {totalPages}
-              </span>
-              <Button variant="secondary" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
-                Next
-              </Button>
-            </div>
-          )}
+          <Pagination page={page} totalPages={totalPages} onChange={setPage} />
         </>
       )}
 

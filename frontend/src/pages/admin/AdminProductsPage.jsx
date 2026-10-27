@@ -17,6 +17,7 @@ import ProductThumb, { ProductImageViewer } from '../../components/admin/Product
 import useCategories from '../../hooks/useCategories';
 import { useAuth } from '../../context/AuthContext';
 import { isAdmin } from '../../utils/roles';
+import Pagination from '../../components/ui/Pagination';
 
 export default function AdminProductsPage() {
   const [products, setProducts] = useState([]);
@@ -253,19 +254,7 @@ export default function AdminProductsPage() {
             </table>
           </Card>
 
-          {totalPages > 1 && (
-            <div className="mt-6 flex items-center justify-center gap-3">
-              <Button variant="secondary" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-                Previous
-              </Button>
-              <span className="text-sm text-slate-500">
-                Page {page} of {totalPages}
-              </span>
-              <Button variant="secondary" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
-                Next
-              </Button>
-            </div>
-          )}
+          <Pagination page={page} totalPages={totalPages} onChange={setPage} />
         </>
       )}
 
@@ -277,6 +266,8 @@ export default function AdminProductsPage() {
             onCancel={closeModal}
             categories={categories}
             onCreateCategory={addCategory}
+            canCorrectStock={canAdjustStock}
+            onStockCorrected={load}
           />
         </Modal>
       )}

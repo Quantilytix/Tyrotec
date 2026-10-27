@@ -1,7 +1,7 @@
 const supabase = require('../config/supabase');
 const asyncHandler = require('../utils/asyncHandler');
 const { isStaff } = require('../utils/roles');
-const { createQuoteForCustomer, convertQuoteForCustomer } = require('../services/quoteService');
+const { createQuoteForCustomer, convertQuoteForCustomer, updateQuoteItems } = require('../services/quoteService');
 const { flagIfNeeded, flagStockShort } = require('../services/adminReviewService');
 const { notifyInternalTeam, notifyUser, sendEmailOrThrow } = require('../services/notificationService');
 const { generateQuotePdfBuffer } = require('../services/quotePdfService');
@@ -15,6 +15,20 @@ const { displayTotals } = require('../utils/vat');
 const { checkQuoteDiscounts, endedDiscountLines } = require('../services/discountService');
 
 const RESERVATION_MINUTES = Number(process.env.RESERVATION_EXPIRY_MINUTES) || 60;
+
+// "10% off Hydraulic Pump (Loyal customer); 5% off Valve (Staff discount)" for
+// the audit log: the staff discounts on a quote's lines, or '' when there are
+// none. Catalogue discounts (discount_id set) aren't staff decisions, so they
+// aren't listed.
+async function describeStaffDiscounts(lines) {
+  const discounted = (lines || []).filter((l) => !l.discount_id && Number(l.discount_percent) > 0);
+  if (discounted.length === 0) return '';
+  const { data: products } = await supabase.from('products').select('id, name').in('id', discounted.map((l) => l.product_id));
+  const nameById = new Map((products || []).map((p) => [p.id, p.name]));
+  return discounted
+    .map((l) => `${Number(l.discount_percent)}% off ${nameById.get(l.product_id) || 'a product'} (${l.discount_reason})`)
+    .join('; ');
+}
 
 const createQuote = asyncHandler(async (req, res) => {
   const { items } = req.body;
@@ -40,8 +54,18 @@ const createQuoteForCustomerAdmin = asyncHandler(async (req, res) => {
   if (custErr || !customer) return res.status(404).json({ error: 'Customer not found' });
 
   const customerLabel = customer.company_name || customer.email;
-  const result = await createQuoteForCustomer(customer_id, customerLabel, items, 'admin');
+  const result = await createQuoteForCustomer(customer_id, customerLabel, items, 'admin', { staff: true });
   if (result.error) return res.status(result.status).json({ error: result.error });
+
+  const discounts = await describeStaffDiscounts(result.lines);
+  await logForUser(req.user, {
+    action: discounts ? 'quote.discount_given' : 'quote.created',
+    entityType: 'quote',
+    entityId: result.quoteId,
+    description: `Created quote #${result.quoteNumber} for ${customerLabel} (${formatCurrency(result.total_amount)} incl. VAT)` +
+      `${discounts ? ` with staff discounts: ${discounts}` : ''}.`,
+  });
+  delete result.lines;
 
   return res.status(201).json({ message: 'Quote created successfully', ...result });
 });
@@ -216,6 +240,62 @@ const getQuoteById = asyncHandler(async (req, res) => {
     ...data,
     quote_items: (data.quote_items || []).map((item) => ({ ...item, discount_ended: ended.has(item.id) })),
   });
+});
+
+// Changes a quote's products and quantities before it's ordered: the
+// customer for their own quote, staff for any customer's. Every line is
+// priced again at today's prices. When staff edit, the customer is told;
+// when a customer edits, staff are.
+const editQuote = asyncHandler(async (req, res) => {
+  const { quoteId } = req.params;
+  const staff = isStaff(req.user.role);
+
+  if (!staff) {
+    const { data: own } = await supabase.from('quotes').select('id').eq('id', quoteId).eq('customer_id', req.user.id).maybeSingle();
+    if (!own) return res.status(404).json({ error: 'Quote not found' });
+  }
+
+  const result = await updateQuoteItems(quoteId, req.body.items, { staff });
+  if (result.error) return res.status(result.status).json({ error: result.error });
+  const { quote } = result;
+
+  const { data: customer } = await supabase
+    .from('users')
+    .select('email, phone, company_name')
+    .eq('id', quote.customer_id)
+    .single();
+  const editor = req.user.company_name || req.user.email;
+  const change = `${quote.lines} product line(s), total ${formatCurrency(quote.before)} -> ${formatCurrency(quote.after)} incl. VAT`;
+
+  await Promise.all([
+    staff
+      ? notifyUser({
+          userId: quote.customer_id,
+          type: 'general',
+          title: 'Your quote was updated',
+          message: `We've updated your quote #${quote.quote_number}. The new total is ${formatCurrency(quote.after)} incl. VAT. Open it on the Customer Portal to review it.`,
+          relatedType: 'quote',
+          relatedId: quote.id,
+          email: customer?.email,
+          phone: customer?.phone,
+        })
+      : notifyInternalTeam({
+          type: 'general',
+          title: 'Quote updated by customer',
+          message: `${editor} changed quote #${quote.quote_number}: ${change}.`,
+          relatedType: 'quote',
+          relatedId: quote.id,
+        }),
+    describeStaffDiscounts(quote.items).then((discounts) => logForUser(req.user, {
+      action: staff && discounts ? 'quote.discount_given' : 'quote.updated',
+      entityType: 'quote',
+      entityId: quote.id,
+      description: `${editor} edited quote #${quote.quote_number}${staff ? ` for ${customer?.company_name || customer?.email || 'the customer'}` : ''}: ${change}` +
+        `${discounts ? `. Staff discounts: ${discounts}` : ''}.`,
+    })),
+  ]);
+
+  return res.json({ quoteId: quote.id, total_amount: quote.after });
 });
 
 // A fresh quote for the same products and quantities at today's prices,
@@ -467,6 +547,7 @@ const convertQuoteToOrderAdmin = asyncHandler(async (req, res) => {
 });
 
 module.exports = {
+  editQuote,
   refreshQuote,
   createQuote,
   createQuoteForCustomerAdmin,

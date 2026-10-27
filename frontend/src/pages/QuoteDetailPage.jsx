@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { getQuoteById, checkoutQuoteFast, refreshQuote } from '../api/quotes';
 import DiscountNote from '../components/ui/DiscountNote';
+import QuoteItemsEditor from '../components/QuoteItemsEditor';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrency, formatDate } from '../utils/formatters';
 import { displayTotals, lineTotals, vatRateLabel } from '../utils/vat';
@@ -22,11 +23,14 @@ export default function QuoteDetailPage() {
   const [checkingOut, setCheckingOut] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
+  const [editing, setEditing] = useState(false);
+
+  const load = () => getQuoteById(quoteId).then(({ data }) => setQuote(data));
 
   useEffect(() => {
-    getQuoteById(quoteId)
-      .then(({ data }) => setQuote(data))
-      .finally(() => setLoading(false));
+    setEditing(false);
+    load().finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quoteId]);
 
   // The customer's one action on a quote. Stock is checked and reserved
@@ -67,6 +71,8 @@ export default function QuoteDetailPage() {
 
   const discountEnded = quote.quote_items?.some((item) => item.discount_ended);
   const canConvert = quote.status === 'submitted' && !discountEnded;
+  // Changeable until it's ordered (or expires).
+  const canEdit = ['draft', 'submitted'].includes(quote.status);
   const hasShortItems = quote.quote_items?.some(
     (item) => item.products && availabilityNote(item.products.stock_quantity, item.quantity, item.products.lead_time_days)
   );
@@ -107,6 +113,17 @@ export default function QuoteDetailPage() {
         <StatusBadge status={quote.status} />
       </div>
 
+      {editing ? (
+        <QuoteItemsEditor
+          quote={quote}
+          onSaved={async () => {
+            await load();
+            setEditing(false);
+          }}
+          onCancel={() => setEditing(false)}
+        />
+      ) : (
+      <>
       <Card className="mt-6 overflow-x-auto">
         <table className="w-full min-w-[640px] text-sm">
           <thead className="border-b border-slate-100 bg-slate-50 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
@@ -176,6 +193,11 @@ export default function QuoteDetailPage() {
           >
             Download PDF
           </button>
+          {canEdit && (
+            <Button variant="secondary" onClick={() => setEditing(true)}>
+              Edit quote
+            </Button>
+          )}
           {canConvert && (
             <Button onClick={handleFastCheckout} loading={checkingOut}>
               Accept &amp; order
@@ -189,6 +211,8 @@ export default function QuoteDetailPage() {
           )}
         </div>
       </Card>
+      </>
+      )}
     </div>
   );
 }

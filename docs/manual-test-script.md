@@ -177,6 +177,48 @@ confirm a payment, so use **Record payment** to mark orders paid.
 | 11a.3 | Fill SKU, category, selling price; leave lead time 7. Quantity 3, unit cost 100. **Receive stock** | The purchase is saved. On Products, **Test Gasket** exists with 3 in stock, the new supplier, cost R 100. |
 | 11a.4 | Try a product lead time of 0 on the product form | Refused: at least 1 day. |
 
+## Part 11b. Editing a quote (Customer 1, then Admin)
+
+| # | Do | Expect |
+|---|---|---|
+| 11b.1 | Customer 1: request a quote with 2 Discount Pumps. On the quote, click **Edit quote** | The editor opens with the line and its quantity. |
+| 11b.2 | Change the quantity to 3, add a Waiting Valve with **Add a product**, **Save changes** | The quote now has both lines, priced at today's prices, with the new total. Admin gets "Quote updated by customer". |
+| 11b.3 | Admin: open the same quote, **Edit quote**, remove the Waiting Valve, **Save changes** | "Quote updated… The customer has been notified." Customer 1 gets "Your quote was updated". |
+| 11b.4 | Customer 1: **Accept & order** | The order has exactly the edited lines. The quote no longer offers **Edit quote**. |
+| 11b.5 | **Activity log** | "quote updated" entries for both edits. |
+
+## Part 11c. Page picker and correcting stock or cost (Admin)
+
+| # | Do | Expect |
+|---|---|---|
+| 11c.1 | Products (customer or admin): scroll to the bottom | Numbered pages, Previous/Next, and **Go to page … of N**. Click a number, then type a page and **Go**: the right page shows, highlighted. |
+| 11c.2 | Admin: Products → **Edit** a product. In "Stock and cost", click **Correct stock or cost** | Fields for stock and average cost, and a required "Why". |
+| 11c.3 | Change the average cost (e.g. add a 0), enter a reason, **Save correction** | The new cost shows straight away. **Activity log**: "Corrected … average cost R… -> R…. Note: …". |
+| 11c.4 | Correct the stock the same way | The stock updates, and the product's stock history shows a "count correction" with your note. |
+| 11c.5 | Sign in as the sales rep and edit a product | Stock and cost are shown but there is no **Correct stock or cost**. |
+
+## Part 11d. Staff discounts on a quote (Admin or Sales rep)
+
+| # | Do | Expect |
+|---|---|---|
+| 11d.1 | **Quotes → New quote**: pick Customer 1, add a Discount Pump, enter **10** in **Discount %** and a reason, e.g. `Loyal customer` | The line shows R 900,00 with R 1 000,00 crossed out; totals update. |
+| 11d.2 | **Create quote** | Created. **Activity log**, action **Quote discount given**: "...with staff discounts: 10% off Discount Pump (Loyal customer)". |
+| 11d.3 | Customer 1: open the quote | "10% off: Loyal customer · was R 1 000,00" on the line. |
+| 11d.4 | Customer 1: **Edit quote**, change the quantity, **Save changes** | The 10% stays on that line. |
+| 11d.5 | Admin: **Edit quote**, change the discount to 15%, save | New price; another **Quote discount given** entry in the log. |
+| 11d.6 | Customer 1: **Accept & order** | The order line keeps the discounted price and reason. |
+
+## Part 11e. Help chat (Customer 1)
+
+| # | Do | Expect |
+|---|---|---|
+| 11e.1 | Menu: **Help** | A chat with a welcome message and suggested questions. |
+| 11e.2 | Click **Where is Tyrotec based and how do I contact you?** | "Typing…", then an answer with Rustenburg, the phone number and email from the website. |
+| 11e.3 | Ask "How do I order a product that is out of stock?" | Explains adding it to a quote, accepting, and waiting for stock. |
+| 11e.4 | Ask something unrelated, e.g. the weather | Politely says it only helps with Tyrotec and the portal. |
+| 11e.5 | Ask "How much is a hydraulic pump?" | Points to the Products page; never makes up a price. |
+| 11e.6 | **Start over** | The conversation clears. |
+
 ## Part 12. Final checks (Admin)
 
 | # | Do | Expect |

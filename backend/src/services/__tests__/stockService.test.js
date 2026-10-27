@@ -9,6 +9,8 @@ const {
   receivePurchase,
   adjustStock,
   recordOpeningStock,
+  validateCorrectionInput,
+  correctStockAndCost,
 } = require('../stockService');
 
 const PURCHASE = {
@@ -147,5 +149,39 @@ describe('RPC wrappers', () => {
     supabase.rpc.mockResolvedValue({ data: 'os-1', error: null });
     await recordOpeningStock({ as_of_date: '2026-09-30' }, 'u');
     expect(supabase.rpc).toHaveBeenCalledWith('record_opening_stock', { p_as_of_date: '2026-09-30', p_costs: {}, p_created_by: 'u' });
+  });
+});
+
+describe('validateCorrectionInput', () => {
+  const OK = { product_id: 'p-1', stock_quantity: '12', supplier_cost: '1000.005', note: ' Missing a 0 ' };
+
+  it('accepts a stock and cost correction, rounding the cost to cents', () => {
+    expect(validateCorrectionInput(OK).value).toEqual({ product_id: 'p-1', stock_quantity: 12, supplier_cost: 1000.01, note: 'Missing a 0' });
+  });
+
+  it('treats a blank field as "leave it as it is"', () => {
+    expect(validateCorrectionInput({ ...OK, stock_quantity: '' }).value.stock_quantity).toBeNull();
+    expect(validateCorrectionInput({ ...OK, supplier_cost: '' }).value.supplier_cost).toBeNull();
+  });
+
+  it.each([
+    [{ stock_quantity: '', supplier_cost: '' }, 'Enter the correct stock or average cost.'],
+    [{ stock_quantity: '-1' }, 'Stock must be a whole number, 0 or more.'],
+    [{ stock_quantity: '2.5' }, 'Stock must be a whole number, 0 or more.'],
+    [{ supplier_cost: '-5' }, 'The average cost must be 0 or more.'],
+    [{ note: '  ' }, 'Say why you are making this correction.'],
+  ])('refuses %o', (change, message) => {
+    expect(validateCorrectionInput({ ...OK, ...change }).error).toBe(message);
+  });
+
+  it('passes the correction to the database function and words its errors', async () => {
+    supabase.rpc.mockResolvedValueOnce({ data: { stock_before: 1, stock_after: 12 }, error: null });
+    const ok = await correctStockAndCost(validateCorrectionInput(OK).value, 'u-1');
+    expect(supabase.rpc).toHaveBeenCalledWith('correct_stock_and_cost', {
+      p_product_id: 'p-1', p_new_stock: 12, p_new_cost: 1000.01, p_note: 'Missing a 0', p_created_by: 'u-1',
+    });
+    expect(ok.result.stock_after).toBe(12);
+    supabase.rpc.mockResolvedValueOnce({ data: null, error: { message: 'TRT-1 has no average cost yet. Enter it as well.' } });
+    expect((await correctStockAndCost(validateCorrectionInput(OK).value, 'u-1')).error).toBe('TRT-1 has no average cost yet. Enter it as well.');
   });
 });

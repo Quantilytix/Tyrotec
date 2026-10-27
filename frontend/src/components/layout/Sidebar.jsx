@@ -10,6 +10,7 @@ const CUSTOMER_NAV_ITEMS = [
   { to: '/quotes', label: 'Quotes', icon: DocIcon },
   { to: '/orders', label: 'Orders', icon: TruckIcon },
   { to: '/notifications', label: 'Notifications', icon: BellIcon },
+  { to: '/help', label: 'Help', icon: HelpIcon },
   { to: '/profile', label: 'Profile', icon: ProfileIcon },
 ];
 
@@ -145,6 +146,15 @@ function FactoryIcon(props) {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" {...props}>
       <path d="M3 21V10l6 4V10l6 4V5h6v16H3z" strokeLinecap="round" strokeLinejoin="round" />
       <path d="M7 18h2M12 18h2M17 18h1" strokeLinecap="round" />
+    </svg>
+  );
+}
+function HelpIcon(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" {...props}>
+      <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8a2.5 2.5 0 0 1-2.5 2.5H10l-4.5 4v-4H6.5A2.5 2.5 0 0 1 4 13.5z" strokeLinejoin="round" />
+      <path d="M9.75 8a2.25 2.25 0 1 1 3.2 2.04c-.56.26-.95.8-.95 1.42v.29" strokeLinecap="round" />
+      <circle cx="12" cy="14" r="0.6" fill="currentColor" />
     </svg>
   );
 }
