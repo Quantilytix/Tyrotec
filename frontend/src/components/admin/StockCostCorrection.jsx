@@ -4,7 +4,7 @@ import { formatCurrency } from '../../utils/formatters';
 import Button from '../ui/Button';
 
 const FIELD =
-  'mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none transition-colors duration-150 focus:border-teal-500';
+  'mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition-colors duration-150 focus:border-teal-500';
 const LABEL = 'block text-xs font-medium text-slate-600';
 
 // A product's stock and average cost, on the product form. Admins can put
