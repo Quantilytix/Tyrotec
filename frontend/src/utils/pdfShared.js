@@ -10,22 +10,31 @@
 // into -- ink/navy/canvas/good/bad/amber are that file's exact hex values
 // converted to RGB triples, not a separate palette invented here.
 
-// Seller details shown in the document's "FROM" panel and footer. Only
-// `name` and `tagline` are known for sure right now -- the rest render as
-// blank lines (nothing fabricated) until real values are filled in here, at
-// which point they show up automatically on every document. bankDetails is a
-// plain array of lines (e.g. bank name, account number, branch code) printed
-// under a quote's Terms so a customer paying by EFT has somewhere to copy
-// them from.
+// Seller details shown in the document's "FROM" panel and footer. A field
+// left empty is simply not shown (nothing fabricated). bankDetails is a
+// plain array of lines printed under Terms on quotes and tax invoices, so a
+// customer paying by EFT has somewhere to copy them from. Keep in sync with
+// backend/src/services/quotePdfService.js.
 export const COMPANY = {
   name: 'Tyrotec',
   tagline: 'Supplier for industrial parts and supplies',
-  address: '',
-  phone: '',
-  email: '',
-  website: '',
+  // Each line of the address is its own line on the document.
+  address: '56 Cnr Belkum & Kock Street, Eastend\nRustenburg, 0299',
+  phone: '087 804 1426',
+  email: 'sales@tyrotec.co.za',
+  website: 'www.tyrotec.co.za',
+  // Still to come from Tyrotec: shown on every document once filled in. A tax
+  // invoice needs the VAT number.
   vatNumber: '',
-  bankDetails: [],
+  registrationNumber: '',
+  bankDetails: [
+    'Bank: FNB',
+    'Account holder: TYROTEC (PVT)LTD',
+    'Account number: 63183783539',
+    'Account type: Gold Business Account',
+    'Branch code: 252442',
+    'SWIFT code: FIRNZAJJ',
+  ],
 };
 
 export const INK = [16, 25, 43]; // --color-ink
@@ -201,11 +210,12 @@ export function buildCustomerLines(doc, customer) {
 
 export function buildCompanyLines() {
   const lines = [];
-  if (COMPANY.address) lines.push(COMPANY.address);
+  if (COMPANY.address) lines.push(...COMPANY.address.split('\n'));
   if (COMPANY.phone) lines.push(COMPANY.phone);
   if (COMPANY.email) lines.push(COMPANY.email);
   if (COMPANY.website) lines.push(COMPANY.website);
   if (COMPANY.vatNumber) lines.push(`VAT No: ${COMPANY.vatNumber}`);
+  if (COMPANY.registrationNumber) lines.push(`Reg No: ${COMPANY.registrationNumber}`);
   return lines;
 }
 

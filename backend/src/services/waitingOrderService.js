@@ -12,6 +12,7 @@ const supabase = require('../config/supabase');
 const { notifyUser, notifyInternalTeam } = require('./notificationService');
 const { logActivity, logForUser } = require('./activityLogService');
 const { formatCurrency } = require('../utils/formatCurrency');
+const { saleLabel } = require('../utils/invoiceNumber');
 
 const TIMEZONE = 'Africa/Johannesburg';
 const MAX_ETA_DAYS = 365;
@@ -41,7 +42,7 @@ async function setStockEta(orderId, days, user) {
 
   const { data: order, error: findErr } = await supabase
     .from('orders')
-    .select('id, order_number, status, customer_id, users(email, phone)')
+    .select('id, order_number, invoice_number, status, customer_id, users(email, phone)')
     .eq('id', orderId)
     .single();
   if (findErr || !order) return { error: 'Order not found', status: 404 };
@@ -58,7 +59,7 @@ async function setStockEta(orderId, days, user) {
       userId: order.customer_id,
       type: 'order_status_changed',
       title: 'When your stock will arrive',
-      message: `The items on your order #${order.order_number} are expected around ${formatDay(date)}. We'll let you know as soon as they arrive so you can pay.`,
+      message: `The items on your ${saleLabel(order)} are expected around ${formatDay(date)}. We'll let you know as soon as they arrive so you can pay.`,
       relatedType: 'order',
       relatedId: orderId,
       email: order.users?.email,
@@ -83,7 +84,7 @@ async function notifyStockArrivals() {
     .update({ allocation_notified_at: new Date().toISOString() })
     .not('allocated_at', 'is', null)
     .is('allocation_notified_at', null)
-    .select('id, order_number, customer_id, total_amount, payment_due_at');
+    .select('id, order_number, invoice_number, customer_id, total_amount, payment_due_at');
   if (error) throw error;
   if (!claimed || claimed.length === 0) return [];
 
@@ -101,7 +102,7 @@ async function notifyStockArrivals() {
         userId: order.customer_id,
         type: 'order_status_changed',
         title: 'Your stock has arrived',
-        message: `Good news: the items on your order #${order.order_number} have arrived and are set aside for you. Pay now on the Customer Portal with PayFast (card or Instant EFT).${due}`,
+        message: `Good news: the items on your ${saleLabel(order)} have arrived and are set aside for you. Pay now on the Customer Portal with PayFast (card or Instant EFT).${due}`,
         relatedType: 'order',
         relatedId: order.id,
         email: customer?.email,

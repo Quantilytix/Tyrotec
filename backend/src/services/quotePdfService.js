@@ -5,6 +5,7 @@ const autoTable = require('jspdf-autotable').default;
 const { formatCurrency } = require('../utils/formatCurrency');
 const { displayTotals, lineTotals, VAT_RATE } = require('../utils/vat');
 const { discountLabel } = require('../utils/discounts');
+const { invoiceLabel } = require('../utils/invoiceNumber');
 
 // Same layout as the portal's own "Download quote" feature
 // (frontend/src/utils/generateQuotePdf.js -- keep the two in sync), adapted
@@ -18,21 +19,31 @@ const { discountLabel } = require('../utils/discounts');
 // is logged into -- ink/navy/canvas/good/bad/amber are that file's exact
 // hex values converted to RGB triples, not a separate palette invented here.
 
-// Seller details shown in the document's "FROM" panel and footer. Only
-// `name` and `tagline` are known for sure right now -- the rest render as
-// blank lines (nothing fabricated) until real values are filled in here, at
-// which point they show up automatically on every quote. bankDetails is a
-// plain array of lines (e.g. bank name, account number, branch code) printed
-// under Terms so a customer paying by EFT has somewhere to copy them from.
+// Seller details shown in the document's "FROM" panel and footer. A field
+// left empty is simply not shown (nothing fabricated). bankDetails is a
+// plain array of lines printed under Terms on quotes and tax invoices, so a
+// customer paying by EFT has somewhere to copy them from. Keep in sync with
+// frontend/src/utils/pdfShared.js.
 const COMPANY = {
   name: 'Tyrotec',
   tagline: 'B2B supplier for industrial parts and supplies',
-  address: '',
-  phone: '',
-  email: '',
-  website: '',
+  // Each line of the address is its own line on the document.
+  address: '56 Cnr Belkum & Kock Street, Eastend\nRustenburg, 0299',
+  phone: '087 804 1426',
+  email: 'sales@tyrotec.co.za',
+  website: 'www.tyrotec.co.za',
+  // Still to come from Tyrotec: shown on every document once filled in. A tax
+  // invoice needs the VAT number.
   vatNumber: '',
-  bankDetails: [],
+  registrationNumber: '',
+  bankDetails: [
+    'Bank: FNB',
+    'Account holder: TYROTEC (PVT)LTD',
+    'Account number: 63183783539',
+    'Account type: Gold Business Account',
+    'Branch code: 252442',
+    'SWIFT code: FIRNZAJJ',
+  ],
 };
 
 // Loaded once at require-time, not per PDF -- it's a small (~15KB) static
@@ -82,7 +93,7 @@ function monogram(name) {
   return capitals.length >= 2 ? capitals : name.slice(0, 2).toUpperCase();
 }
 
-function drawHeader(doc) {
+function drawHeader(doc, title) {
   doc.setFillColor(...ACCENT_YELLOW);
   doc.rect(0, 0, PAGE_WIDTH, 2, 'F');
 
@@ -113,10 +124,11 @@ function drawHeader(doc) {
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(19);
   doc.setTextColor(255, 255, 255);
-  doc.text('QUOTATION', PAGE_WIDTH - MARGIN, 22, { align: 'right' });
+  doc.text(title, PAGE_WIDTH - MARGIN, 22, { align: 'right' });
 }
 
-function drawMetaStrip(doc, quote) {
+// meta: { numberLabel, number, date, status: { label, color } }
+function drawMetaStrip(doc, meta) {
   doc.setFillColor(...CANVAS);
   doc.rect(0, 36, PAGE_WIDTH, 16, 'F');
   doc.setDrawColor(...BORDER);
@@ -128,19 +140,17 @@ function drawMetaStrip(doc, quote) {
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(7);
   doc.setTextColor(...GRAY);
-  doc.text('QUOTE NUMBER', columns[0], 42);
+  doc.text(meta.numberLabel, columns[0], 42);
   doc.text('DATE ISSUED', columns[1], 42);
   doc.text('STATUS', columns[2], 42);
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(10.5);
   doc.setTextColor(...INK);
-  doc.text(`#${quote.quote_number}`, columns[0], 49);
-  doc.text(formatDate(quote.created_at || new Date()), columns[1], 49);
+  doc.text(meta.number, columns[0], 49);
+  doc.text(formatDate(meta.date || new Date()), columns[1], 49);
 
-  const status = String(quote.status || 'submitted');
-  const label = status.charAt(0).toUpperCase() + status.slice(1);
-  const color = STATUS_COLORS[status] || STATUS_COLORS.expired;
+  const { label, color } = meta.status;
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8.5);
   const textWidth = doc.getTextWidth(label);
@@ -196,11 +206,12 @@ function buildCustomerLines(doc, customer) {
 
 function buildCompanyLines() {
   const lines = [];
-  if (COMPANY.address) lines.push(COMPANY.address);
+  if (COMPANY.address) lines.push(...COMPANY.address.split('\n'));
   if (COMPANY.phone) lines.push(COMPANY.phone);
   if (COMPANY.email) lines.push(COMPANY.email);
   if (COMPANY.website) lines.push(COMPANY.website);
   if (COMPANY.vatNumber) lines.push(`VAT No: ${COMPANY.vatNumber}`);
+  if (COMPANY.registrationNumber) lines.push(`Reg No: ${COMPANY.registrationNumber}`);
   return lines;
 }
 
@@ -209,7 +220,8 @@ function buildCompanyLines() {
 // portion. Matches frontend/src/utils/generateQuotePdf.js.
 function drawTotalsBox(doc, x, y, totals) {
   const width = 80;
-  const height = 26;
+  // Tall enough to hold the total due, as in frontend/src/utils/generateQuotePdf.js.
+  const height = 40;
   doc.setFillColor(...NAVY_TINT);
   doc.setDrawColor(...NAVY);
   doc.setLineWidth(0.4);
@@ -246,18 +258,13 @@ function drawTotalsBox(doc, x, y, totals) {
   return y + height;
 }
 
-function drawTerms(doc, x, y) {
+function drawTerms(doc, x, y, notes) {
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(7.5);
   doc.setTextColor(...GRAY);
   doc.text('TERMS', x, y);
   y += 5;
 
-  const notes = [
-    'This quotation is valid for 14 days from the date issued.',
-    'All prices exclude VAT. VAT is shown per line and in the totals.',
-    'Please quote the number above when confirming or paying.',
-  ];
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8.5);
   doc.setTextColor(...GRAY);
@@ -298,15 +305,17 @@ function drawFooter(doc, pageNumber, totalPages, channel) {
   doc.text(`Page ${pageNumber} of ${totalPages}`, PAGE_WIDTH - MARGIN, footerY + 9.5, { align: 'right' });
 }
 
-function generateQuotePdfBuffer({ quote, items, customer, channel = 'WhatsApp' }) {
+// The shared layout of a quotation and a tax invoice. `spec` says what
+// differs: { title, meta, continued, terms, totals }.
+function renderDocumentPdf(spec, { items, customer, channel }) {
   // compress: true flate-compresses PDF streams, including embedded images --
   // without it jsPDF stores the logo as raw uncompressed RGBA pixel data,
   // ballooning an ~2KB PNG into a >100KB stream despite the source image
   // being almost entirely flat white.
   const doc = new jsPDF({ compress: true });
 
-  drawHeader(doc);
-  drawMetaStrip(doc, quote);
+  drawHeader(doc, spec.title);
+  drawMetaStrip(doc, spec.meta);
 
   const leftPanelY = drawPartyPanel(
     doc,
@@ -350,7 +359,7 @@ ${discountLabel(item.discount_percent, item.discount_reason)} (was ${formatCurre
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(9);
         doc.setTextColor(...INK);
-        doc.text(`${COMPANY.name} — Quotation #${quote.quote_number} (continued)`, MARGIN, 12);
+        doc.text(`${COMPANY.name} — ${spec.continued} (continued)`, MARGIN, 12);
         doc.setDrawColor(...BORDER);
         doc.setLineWidth(0.3);
         doc.line(MARGIN, 15, PAGE_WIDTH - MARGIN, 15);
@@ -360,14 +369,15 @@ ${discountLabel(item.discount_percent, item.discount_reason)} (was ${formatCurre
 
   const pageHeight = doc.internal.pageSize.getHeight();
   let finalY = doc.lastAutoTable.finalY;
-  if (finalY + 45 > pageHeight - 26) {
+  // Room for the terms and banking details (about 60mm) above the footer.
+  if (finalY + 64 > pageHeight - 26) {
     doc.addPage();
     finalY = 14;
   }
 
   const blockY = finalY + 8;
-  drawTerms(doc, MARGIN, blockY);
-  drawTotalsBox(doc, PAGE_WIDTH - MARGIN - 80, blockY - 6, displayTotals(quote));
+  drawTerms(doc, MARGIN, blockY, spec.terms);
+  drawTotalsBox(doc, PAGE_WIDTH - MARGIN - 80, blockY - 6, spec.totals);
 
   const totalPages = doc.internal.getNumberOfPages();
   for (let page = 1; page <= totalPages; page += 1) {
@@ -378,4 +388,64 @@ ${discountLabel(item.discount_percent, item.discount_reason)} (was ${formatCurre
   return Buffer.from(doc.output('arraybuffer'));
 }
 
-module.exports = { generateQuotePdfBuffer };
+function generateQuotePdfBuffer({ quote, items, customer, channel = 'WhatsApp' }) {
+  const status = String(quote.status || 'submitted');
+  return renderDocumentPdf(
+    {
+      title: 'QUOTATION',
+      meta: {
+        numberLabel: 'QUOTE NUMBER',
+        number: `#${quote.quote_number}`,
+        date: quote.created_at,
+        status: { label: status.charAt(0).toUpperCase() + status.slice(1), color: STATUS_COLORS[status] || STATUS_COLORS.expired },
+      },
+      continued: `Quotation #${quote.quote_number}`,
+      terms: [
+        'This quotation is valid for 14 days from the date issued.',
+        'All prices exclude VAT. VAT is shown per line and in the totals.',
+        'Please quote the number above when confirming or paying.',
+      ],
+      totals: displayTotals(quote),
+    },
+    { items, customer, channel }
+  );
+}
+
+// Paid when approved payments cover the total; a cancelled invoice says so.
+function invoicePaymentStatus(order) {
+  if (order.status === 'cancelled') return { label: 'Cancelled', color: GRAY };
+  const paid = (order.payments || [])
+    .filter((p) => p.status === 'approved')
+    .reduce((sum, p) => sum + Number(p.amount || 0), 0);
+  const total = Number(displayTotals(order).total_amount || 0);
+  if (total > 0 && paid >= total - 0.005) return { label: 'Paid', color: GOOD };
+  if (paid > 0) return { label: 'Part paid', color: AMBER };
+  return { label: 'Unpaid', color: AMBER };
+}
+
+// A tax invoice for a staff-made sale (orders.invoice_number, 042). Dated the
+// day it became a sale, the same date QX uses.
+function generateInvoicePdfBuffer({ order, items, customer, channel = 'the Tyrotec Customer Portal' }) {
+  const number = invoiceLabel(order.invoice_number);
+  return renderDocumentPdf(
+    {
+      title: 'TAX INVOICE',
+      meta: {
+        numberLabel: 'INVOICE NUMBER',
+        number,
+        date: order.committed_at || order.created_at,
+        status: invoicePaymentStatus(order),
+      },
+      continued: `Tax invoice ${number}`,
+      terms: [
+        'All prices exclude VAT. VAT is shown per line and in the totals.',
+        `Please use ${number} as the reference when paying.`,
+        'You can pay online on the Tyrotec Customer Portal, or by EFT.',
+      ],
+      totals: displayTotals(order),
+    },
+    { items, customer, channel }
+  );
+}
+
+module.exports = { generateQuotePdfBuffer, generateInvoicePdfBuffer, invoicePaymentStatus };

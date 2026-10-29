@@ -32,8 +32,8 @@ const QUOTE = {
 
 const STAFF = { id: 'staff-1', email: 'rep@tyrotec.co.za', role: 'sales_rep', company_name: null };
 
-// supabase.from('quotes') -> the lookup; supabase.from('orders') -> the totals
-// read that follows a successful approval.
+// supabase.from('quotes') -> the lookup; supabase.from('orders') -> the new
+// order's invoice number and totals, read before approval.
 function quoteLookup(quote, error = null) {
   const q = {};
   q.select = jest.fn(() => q);
@@ -108,21 +108,23 @@ describe('POST /api/quotes/:quoteId/admin-convert', () => {
     expect(flagIfNeeded).toHaveBeenCalledWith('order-1', 'cust-1', 90000);
   });
 
-  it('tells the customer their order was placed', async () => {
-    supabase.from.mockReturnValueOnce(quoteLookup(QUOTE)).mockReturnValueOnce(orderTotals({ subtotal_amount: 1000 }));
+  it('tells the customer their invoice is ready, by its invoice number', async () => {
+    supabase.from.mockReturnValueOnce(quoteLookup(QUOTE)).mockReturnValueOnce(orderTotals({ invoice_number: 3, subtotal_amount: 1000 }));
     supabase.rpc.mockResolvedValue({ error: null });
 
-    await run();
+    const { body } = await run();
 
     expect(notifyUser).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: 'cust-1', email: 'buyer@example.com', title: 'Your order has been placed' })
+      expect.objectContaining({ userId: 'cust-1', email: 'buyer@example.com', title: 'Your invoice is ready' })
     );
+    expect(notifyUser.mock.calls[0][0].message).toContain('invoice INV-0003');
+    expect(body).toMatchObject({ invoiceNumber: 3, message: 'Invoice created and awaiting payment.' });
   });
 
   // approve_order refuses rather than overselling. The order must survive as
   // a pending one for staff to decide on, not vanish or go payable.
   it('leaves the order awaiting approval when stock is short, and flags it', async () => {
-    supabase.from.mockReturnValueOnce(quoteLookup(QUOTE));
+    supabase.from.mockReturnValueOnce(quoteLookup(QUOTE)).mockReturnValueOnce(orderTotals({ invoice_number: 4 }));
     supabase.rpc.mockResolvedValue({ error: { message: 'Insufficient stock for product Bearing (have 2, need 10)' } });
 
     const { status, body } = await run();
@@ -177,6 +179,10 @@ describe('POST /api/quotes/:quoteId/admin-convert', () => {
     const entry = logActivity.mock.calls[0][0];
     expect(entry).toMatchObject({ actorId: 'staff-1', actorRole: 'sales_rep', entityId: 'order-1' });
     expect(entry.description).toContain('#12');
+
+    supabase.from.mockReturnValueOnce(quoteLookup(QUOTE)).mockReturnValueOnce(orderTotals({ invoice_number: 5, subtotal_amount: 1000 }));
+    await run();
+    expect(logActivity.mock.calls[1][0].description).toContain('to invoice INV-0005');
     expect(entry.description).toContain('rep@tyrotec.co.za');
   });
 

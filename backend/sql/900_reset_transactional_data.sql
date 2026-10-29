@@ -70,6 +70,7 @@ delete from public.staff_invites;
 -- Start quote and order numbering from 1 for the real trading.
 alter sequence public.quotes_quote_number_seq restart with 1;
 alter sequence public.orders_order_number_seq restart with 1;
+alter sequence public.orders_invoice_number_seq restart with 1;
 
 commit;
 

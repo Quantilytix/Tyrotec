@@ -197,7 +197,8 @@ ${discountLabel(item.discount_percent, item.discount_reason)} (was ${formatCurre
 
   const pageHeight = doc.internal.pageSize.getHeight();
   let finalY = doc.lastAutoTable.finalY;
-  if (finalY + 58 > pageHeight - FOOTER_CLEARANCE) {
+  // Room for the terms and banking details (about 60mm) above the footer.
+  if (finalY + 64 > pageHeight - FOOTER_CLEARANCE) {
     doc.addPage();
     finalY = 14;
   }

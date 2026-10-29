@@ -20,6 +20,7 @@ const STAFF_NAV_ITEMS = [
   { to: '/admin/suppliers', label: 'Suppliers', icon: FactoryIcon },
   { to: '/admin/quotes', label: 'Quotes', icon: DocIcon },
   { to: '/admin/orders', label: 'Orders', icon: TruckIcon },
+  { to: '/admin/invoices', label: 'Invoices', icon: InvoiceIcon },
   { to: '/admin/payments', label: 'Payments', icon: CardIcon },
   { to: '/admin/reviews', label: 'Review queue', icon: FlagIcon },
   { to: '/admin/customers', label: 'Customers', icon: PeopleIcon },
@@ -211,6 +212,14 @@ function FlagIcon(props) {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" {...props}>
       <path d="M5 21V4" strokeLinecap="round" />
       <path d="M5 4h13l-3 4 3 4H5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+function InvoiceIcon(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" {...props}>
+      <path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3z" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M9 8h6M9 12h6M9 16h3" strokeLinecap="round" />
     </svg>
   );
 }

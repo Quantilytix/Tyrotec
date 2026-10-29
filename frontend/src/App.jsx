@@ -109,8 +109,11 @@ export default function App() {
               <Route path="/admin/quotes" element={<AdminQuotesPage />} />
               <Route path="/admin/quotes/new" element={<AdminNewQuotePage />} />
               <Route path="/admin/quotes/:quoteId" element={<AdminQuoteDetailPage />} />
-              <Route path="/admin/orders" element={<AdminOrdersPage />} />
+              {/* Keyed so switching between Orders and Invoices starts afresh. */}
+              <Route path="/admin/orders" element={<AdminOrdersPage key="orders" kind="orders" />} />
               <Route path="/admin/orders/:id" element={<AdminOrderDetailPage />} />
+              <Route path="/admin/invoices" element={<AdminOrdersPage key="invoices" kind="invoices" />} />
+              <Route path="/admin/invoices/:id" element={<AdminOrderDetailPage />} />
               <Route path="/admin/payments" element={<AdminPaymentsPage />} />
               <Route path="/admin/customers" element={<AdminCustomersPage />} />
               <Route path="/admin/customers/:id" element={<AdminCustomerDetailPage />} />

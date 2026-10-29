@@ -12,6 +12,7 @@ const { buildQuotesWorkbook, sendWorkbook } = require('../services/exportService
 const { applyDateRange, fetchAllRows } = require('../utils/exportQuery');
 const { filterBySearch } = require('../utils/searchFilter');
 const { displayTotals } = require('../utils/vat');
+const { invoiceLabel } = require('../utils/invoiceNumber');
 const { checkQuoteDiscounts, endedDiscountLines } = require('../services/discountService');
 
 const RESERVATION_MINUTES = Number(process.env.RESERVATION_EXPIRY_MINUTES) || 60;
@@ -497,6 +498,14 @@ const convertQuoteToOrderAdmin = asyncHandler(async (req, res) => {
   let status = 'pending_approval';
   let stockShort = false;
 
+  // Staff-made sales are invoices: the order got its invoice number on insert (042).
+  const { data: order } = await supabase
+    .from('orders')
+    .select('invoice_number, subtotal_amount, vat_amount, total_amount')
+    .eq('id', result.orderId)
+    .single();
+  const invoice = order?.invoice_number ? `invoice ${invoiceLabel(order.invoice_number)}` : `order #${result.orderNumber}`;
+
   const { error: approveErr } = await supabase.rpc('approve_order', { p_order_id: result.orderId });
   if (approveErr) {
     stockShort = true;
@@ -504,11 +513,6 @@ const convertQuoteToOrderAdmin = asyncHandler(async (req, res) => {
   } else {
     status = 'approved';
     // Same flags a customer's own checkout raises: high value, first order.
-    const { data: order } = await supabase
-      .from('orders')
-      .select('subtotal_amount, vat_amount, total_amount')
-      .eq('id', result.orderId)
-      .single();
     if (order) {
       await flagIfNeeded(result.orderId, quote.customer_id, displayTotals(order).subtotal_amount);
     }
@@ -522,15 +526,15 @@ const convertQuoteToOrderAdmin = asyncHandler(async (req, res) => {
     entityType: 'order',
     entityId: result.orderId,
     description: stockShort
-      ? `${staffLabel} converted ${customerLabel}'s quote #${quote.quote_number} to order #${result.orderNumber}, which needs approval: not enough stock.`
-      : `${staffLabel} converted ${customerLabel}'s quote #${quote.quote_number} to order #${result.orderNumber} (${formatCurrency(quote.total_amount)}) on the customer's behalf; awaiting payment.`,
+      ? `${staffLabel} converted ${customerLabel}'s quote #${quote.quote_number} to ${invoice}, which needs approval: not enough stock.`
+      : `${staffLabel} converted ${customerLabel}'s quote #${quote.quote_number} to ${invoice} (${formatCurrency(quote.total_amount)}); awaiting payment.`,
   });
 
   await notifyUser({
     userId: quote.customer_id,
     type: 'order_status_changed',
-    title: 'Your order has been placed',
-    message: `We've turned your quote #${quote.quote_number} into order #${result.orderNumber}. We'll confirm as soon as your payment reflects.`,
+    title: 'Your invoice is ready',
+    message: `We've turned your quote #${quote.quote_number} into ${invoice}. You can download it and pay on the Customer Portal. We'll confirm as soon as your payment reflects.`,
     relatedType: 'order',
     relatedId: result.orderId,
     email: quote.users?.email,
@@ -538,11 +542,12 @@ const convertQuoteToOrderAdmin = asyncHandler(async (req, res) => {
 
   return res.status(201).json({
     ...result,
+    invoiceNumber: order?.invoice_number ?? null,
     status,
     stockShort,
     message: stockShort
-      ? 'Order created, but there is not enough stock. It needs approval before it can be paid.'
-      : 'Order created and awaiting payment.',
+      ? 'Invoice created, but there is not enough stock. It needs approval before it can be paid.'
+      : 'Invoice created and awaiting payment.',
   });
 });
 

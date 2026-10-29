@@ -15,8 +15,13 @@ import SourceBadge from '../../components/ui/SourceBadge';
 import Spinner from '../../components/ui/Spinner';
 import EmptyState from '../../components/ui/EmptyState';
 import Card from '../../components/ui/Card';
+import { invoiceLabel } from '../../utils/invoiceNumber';
 
-export default function AdminOrdersPage() {
+// kind 'orders': what customers placed on the portal or WhatsApp.
+// kind 'invoices': sales staff made from a quote, numbered INV-0001.
+export default function AdminOrdersPage({ kind = 'orders' }) {
+  const invoices = kind === 'invoices';
+  const noun = invoices ? 'invoices' : 'orders';
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [sourceFilter, setSourceFilter] = useState('all');
@@ -26,10 +31,11 @@ export default function AdminOrdersPage() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    getAllOrdersAdmin()
-      .then(({ data }) => setOrders(data))
+    getAllOrdersAdmin(kind)
+      // invoice_ref: the INV- number, so it can be searched like it's shown.
+      .then(({ data }) => setOrders(data.map((o) => (o.invoice_number ? { ...o, invoice_ref: invoiceLabel(o.invoice_number) } : o))))
       .finally(() => setLoading(false));
-  }, []);
+  }, [kind]);
 
   const visibleOrders = useMemo(
     () =>
@@ -37,7 +43,7 @@ export default function AdminOrdersPage() {
         (o) =>
           (sourceFilter === 'all' || o.source === sourceFilter) &&
           matchesStatusGroup(statusFilter, o.status) &&
-          matchesSearch(search, recordSearchParts(o, 'order_number'))
+          matchesSearch(search, recordSearchParts(o, invoices ? 'invoice_ref' : 'order_number'))
       ),
     [orders, sourceFilter, statusFilter, search]
   );
@@ -47,7 +53,7 @@ export default function AdminOrdersPage() {
   // Spelled out in the export modal so it's clear the file follows the
   // filters on screen, not just the date range chosen in the modal.
   const filterSummary = `${[
-    sourceFilter === 'all' ? 'All sources' : `Source: ${sourceFilter}`,
+    invoices ? null : sourceFilter === 'all' ? 'All sources' : `Source: ${sourceFilter}`,
     statusFilter === 'all' ? 'all statuses' : `status: ${statusGroupLabel(statusFilter)}`,
     search ? `search: "${search}"` : null,
   ]
@@ -62,15 +68,15 @@ export default function AdminOrdersPage() {
   const handleExport = async ({ from, to }) => {
     try {
       const response = await exportOrdersAdmin({
+        kind,
         source: sourceFilter,
-        status: statusFilter,
         search: search || undefined,
         from: from || undefined,
         to: to || undefined,
       });
-      saveBlobResponse(response, 'orders.xlsx');
+      saveBlobResponse(response, `${noun}.xlsx`);
     } catch (err) {
-      throw new Error(await blobErrorMessage(err, 'Could not export the orders.'));
+      throw new Error(await blobErrorMessage(err, `Could not export the ${noun}.`));
     }
   };
 
@@ -78,8 +84,12 @@ export default function AdminOrdersPage() {
     <div>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="font-display text-xl font-semibold text-ink">Orders</h1>
-          <p className="mt-1 text-sm text-slate-500">Every order placed across all customers.</p>
+          <h1 className="font-display text-xl font-semibold text-ink">{invoices ? 'Invoices' : 'Orders'}</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            {invoices
+              ? 'Invoices staff made for customers from their quotes.'
+              : 'Orders customers placed on the portal or WhatsApp.'}
+          </p>
         </div>
         <Button variant="secondary" onClick={() => setShowExport(true)}>
           Export to Excel
@@ -87,9 +97,9 @@ export default function AdminOrdersPage() {
       </div>
 
       {showExport && (
-        <Modal title="Export orders to Excel" onClose={() => setShowExport(false)}>
+        <Modal title={`Export ${noun} to Excel`} onClose={() => setShowExport(false)}>
           <ExportModal
-            noun="orders"
+            noun={noun}
             filterSummary={filterSummary}
             countFor={countInRange}
             onExport={handleExport}
@@ -108,7 +118,10 @@ export default function AdminOrdersPage() {
         statuses={ORDER_STATUS_GROUPS}
         shown={visibleOrders.length}
         total={orders.length}
-        noun="orders"
+        noun={noun}
+        // Staff-made sales are on the Invoices page, so Orders only offers
+        // the customers' own channels.
+        sources={invoices ? [] : ['portal', 'whatsapp']}
       />
 
       {loading ? (
@@ -116,11 +129,13 @@ export default function AdminOrdersPage() {
       ) : visibleOrders.length === 0 ? (
         <div className="mt-6">
           <EmptyState
-            title={isFiltering ? 'No orders match these filters' : 'No orders yet'}
+            title={isFiltering ? `No ${noun} match these filters` : `No ${noun} yet`}
             description={
               isFiltering
-                ? 'Try a different search, status or source.'
-                : 'Orders converted from customer quotes will show up here.'
+                ? `Try a different search, status${invoices ? '' : ' or source'}.`
+                : invoices
+                  ? 'Use Convert to invoice on a quote to make one.'
+                  : 'Orders customers place from their quotes will show up here.'
             }
           />
         </div>
@@ -129,13 +144,13 @@ export default function AdminOrdersPage() {
           <table className="w-full min-w-[640px] text-sm">
             <thead className="border-b border-slate-100 bg-slate-50 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
               <tr>
-                <th className="px-4 py-3">Order</th>
+                <th className="px-4 py-3">{invoices ? 'Invoice' : 'Order'}</th>
                 <th className="px-4 py-3">Customer</th>
                 <th className="px-4 py-3">Items</th>
                 <th className="px-4 py-3">Total</th>
-                <th className="px-4 py-3">Source</th>
+                {!invoices && <th className="px-4 py-3">Source</th>}
                 <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Placed</th>
+                <th className="px-4 py-3">{invoices ? 'Date' : 'Placed'}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -143,9 +158,11 @@ export default function AdminOrdersPage() {
                 <tr
                   key={order.id}
                   className="cursor-pointer transition-colors duration-150 hover:bg-slate-50"
-                  onClick={() => navigate(`/admin/orders/${order.id}`)}
+                  onClick={() => navigate(`/admin/${kind}/${order.id}`)}
                 >
-                  <td className="px-4 py-3 font-mono text-xs text-teal-600">#{order.order_number}</td>
+                  <td className="px-4 py-3 font-mono text-xs text-teal-600">
+                    {invoices ? order.invoice_ref : `#${order.order_number}`}
+                  </td>
                   <td className="px-4 py-3">
                     <p className="text-ink">{order.users?.company_name || order.users?.email}</p>
                     {order.users?.company_name && (
@@ -154,7 +171,7 @@ export default function AdminOrdersPage() {
                   </td>
                   <td className="px-4 py-3 text-slate-600">{order.order_items?.length || 0} items</td>
                   <td className="px-4 py-3 font-mono font-medium text-ink">{formatCurrency(order.total_amount)}</td>
-                  <td className="px-4 py-3"><SourceBadge source={order.source} /></td>
+                  {!invoices && <td className="px-4 py-3"><SourceBadge source={order.source} /></td>}
                   <td className="px-4 py-3"><StatusBadge status={order.status} /></td>
                   <td className="px-4 py-3 text-slate-500">{formatDate(order.created_at)}</td>
                 </tr>

@@ -29,6 +29,7 @@ Paying
 
 Orders, notifications and account
 - Orders lists every order with its status: Awaiting approval, Awaiting payment, Paid, Ready for collection, Completed or Cancelled.
+- When Tyrotec staff turn a customer's quote into a sale for them, it is a tax invoice with its own number (for example INV-0001). It appears in Orders as "Invoice INV-0001". Open it to download the invoice PDF, and pay with "Pay now" or by EFT using the invoice number as the reference.
 - Notifications shows updates about quotes and orders; the same updates are emailed.
 - Profile holds the account's contact details.
 - Ordering can also be done on WhatsApp if a phone number is linked to the account.

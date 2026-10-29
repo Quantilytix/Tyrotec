@@ -17,7 +17,8 @@ const METHODS = [
   { value: 'other', label: 'Other' },
 ];
 
-export default function RecordPaymentForm({ defaultAmount, orderNumber, onSubmit, onCancel }) {
+// saleName: what's being paid, as shown on its page ("Order #57", "Invoice INV-0003").
+export default function RecordPaymentForm({ defaultAmount, saleName, onSubmit, onCancel }) {
   const [method, setMethod] = useState('bank_transfer');
   const [reference, setReference] = useState('');
   const [amount, setAmount] = useState(defaultAmount);
@@ -40,7 +41,7 @@ export default function RecordPaymentForm({ defaultAmount, orderNumber, onSubmit
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700">
-        Only record a payment you have already confirmed in the bank. Order #{orderNumber} will be
+        Only record a payment you have already confirmed in the bank. {saleName} will be
         marked as <strong>paid</strong> straight away and the customer will be notified.
       </p>
 

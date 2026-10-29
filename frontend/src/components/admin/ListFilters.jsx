@@ -6,6 +6,8 @@ import { statusLabel } from '../../utils/statusLabels';
 // the page header: the header is for actions (Export, New quote), and filters
 // there crowded it out as soon as there was more than one.
 
+const SOURCE_LABELS = { portal: 'Portal', whatsapp: 'WhatsApp', admin: 'Staff' };
+
 const CONTROL =
   'rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition-colors duration-150 focus:border-teal-500';
 
@@ -20,6 +22,8 @@ export default function ListFilters({
   shown,
   total,
   noun,
+  // Which sources to offer; an empty list hides the source filter.
+  sources = ['portal', 'whatsapp', 'admin'],
 }) {
   const filtering = Boolean(search) || source !== 'all' || status !== 'all';
 
@@ -33,12 +37,16 @@ export default function ListFilters({
         className={`${CONTROL} w-full flex-1 sm:w-auto sm:min-w-[16rem]`}
       />
 
-      <select value={source} onChange={(e) => onSourceChange(e.target.value)} className={CONTROL}>
-        <option value="all">All sources</option>
-        <option value="portal">Portal</option>
-        <option value="whatsapp">WhatsApp</option>
-        <option value="admin">Staff</option>
-      </select>
+      {sources.length > 0 && (
+        <select value={source} onChange={(e) => onSourceChange(e.target.value)} className={CONTROL}>
+          <option value="all">All sources</option>
+          {sources.map((value) => (
+            <option key={value} value={value}>
+              {SOURCE_LABELS[value]}
+            </option>
+          ))}
+        </select>
+      )}
 
       <select value={status} onChange={(e) => onStatusChange(e.target.value)} className={`${CONTROL} capitalize`}>
         <option value="all">All statuses</option>

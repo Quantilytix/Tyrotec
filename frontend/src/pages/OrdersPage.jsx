@@ -6,6 +6,7 @@ import StatusBadge from '../components/ui/StatusBadge';
 import Spinner from '../components/ui/Spinner';
 import EmptyState from '../components/ui/EmptyState';
 import Card from '../components/ui/Card';
+import { invoiceLabel } from '../utils/invoiceNumber';
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState([]);
@@ -21,7 +22,7 @@ export default function OrdersPage() {
   return (
     <div>
       <h1 className="font-display text-xl font-semibold text-ink">Orders</h1>
-      <p className="mt-1 text-sm text-slate-500">Orders converted from your quotes.</p>
+      <p className="mt-1 text-sm text-slate-500">Your orders, and invoices we made for you from your quotes.</p>
 
       {loading ? (
         <Spinner />
@@ -37,7 +38,7 @@ export default function OrdersPage() {
           <table className="w-full min-w-[640px] text-sm">
             <thead className="border-b border-slate-100 bg-slate-50 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
               <tr>
-                <th className="px-4 py-3">Order</th>
+                <th className="px-4 py-3">Number</th>
                 <th className="px-4 py-3">Items</th>
                 <th className="px-4 py-3">Total</th>
                 <th className="px-4 py-3">Status</th>
@@ -51,7 +52,9 @@ export default function OrdersPage() {
                   className="cursor-pointer transition-colors duration-150 hover:bg-slate-50"
                   onClick={() => navigate(`/orders/${order.id}`)}
                 >
-                  <td className="px-4 py-3 font-mono text-xs text-teal-600">#{order.order_number}</td>
+                  <td className="px-4 py-3 font-mono text-xs text-teal-600">
+                    {order.invoice_number ? `Invoice ${invoiceLabel(order.invoice_number)}` : `#${order.order_number}`}
+                  </td>
                   <td className="px-4 py-3 text-slate-600">{order.order_items?.length || 0} items</td>
                   <td className="px-4 py-3 font-mono font-medium text-ink">{formatCurrency(order.total_amount)}</td>
                   <td className="px-4 py-3"><StatusBadge status={order.status} /></td>

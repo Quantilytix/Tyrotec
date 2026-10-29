@@ -59,7 +59,7 @@ export default function AdminQuoteDetailPage() {
     setConverting(true);
     try {
       const { data } = await convertQuoteToOrderAdmin(quoteId);
-      navigate(`/admin/orders/${data.orderId}`);
+      navigate(`/admin/invoices/${data.orderId}`);
     } catch (err) {
       setError(err.response?.data?.error || 'Could not convert this quote.');
       setConverting(false);
@@ -224,7 +224,7 @@ export default function AdminQuoteDetailPage() {
           )}
           {canConvert && (
             <Button onClick={() => setShowConvertConfirm(true)} loading={converting}>
-              Convert to order
+              Convert to invoice
             </Button>
           )}
           {quote.status === 'submitted' && discountEnded && (
@@ -239,11 +239,11 @@ export default function AdminQuoteDetailPage() {
 
       {showConvertConfirm && (
         <ConfirmDialog
-          title="Place this order for the customer?"
-          message={`Quote #${quote.quote_number} becomes an order and the stock is set aside for ${
+          title="Make an invoice for the customer?"
+          message={`Quote #${quote.quote_number} becomes a tax invoice and the stock is set aside for ${
             quote.users?.company_name || quote.users?.email || 'this customer'
-          }. You can then record their payment on the order. If stock is short it will wait for approval instead.`}
-          confirmLabel="Convert to order"
+          }. They are told it's ready, and you can email it and record their payment on the invoice. If stock is short it will wait for approval instead.`}
+          confirmLabel="Convert to invoice"
           danger={false}
           onConfirm={handleConvert}
           onCancel={() => setShowConvertConfirm(false)}
@@ -254,7 +254,7 @@ export default function AdminQuoteDetailPage() {
       {showVoidConfirm && (
         <ConfirmDialog
           title="Void this quote?"
-          message={`Quote #${quote.quote_number} will be marked expired and can no longer be converted to an order. This can't be undone.`}
+          message={`Quote #${quote.quote_number} will be marked expired and can no longer be ordered or invoiced. This can't be undone.`}
           confirmLabel="Void quote"
           onConfirm={handleVoid}
           onCancel={() => setShowVoidConfirm(false)}

@@ -4,6 +4,7 @@ const { verifyItnSignature, revalidateWithPayfast } = require('../services/payfa
 const { transitionOrderStatus } = require('../services/orderStateService');
 const { notifyUser } = require('../services/notificationService');
 const { logActivity } = require('../services/activityLogService');
+const { saleLabel } = require('../utils/invoiceNumber');
 
 
 const receiveItn = asyncHandler(async (req, res) => {
@@ -44,7 +45,7 @@ const receiveItn = asyncHandler(async (req, res) => {
 
   const { data: order, error: orderErr } = await supabase
     .from('orders')
-    .select('id, order_number, status, total_amount, customer_id, users(email, phone)')
+    .select('id, order_number, invoice_number, status, total_amount, customer_id, users(email, phone)')
     .eq('id', orderId)
     .single();
   if (orderErr || !order) {
@@ -90,7 +91,7 @@ const receiveItn = asyncHandler(async (req, res) => {
           userId: order.customer_id,
           type: 'order_status_changed',
           title: 'Payment confirmed',
-          message: `Your payment for order #${order.order_number} was confirmed and your order is now being fulfilled.`,
+          message: `Your payment for ${saleLabel(order)} was confirmed and your order is now being fulfilled.`,
           relatedType: 'order',
           relatedId: orderId,
           email: order.users?.email,

@@ -1,6 +1,7 @@
 const supabase = require('../config/supabase');
 const { notifyUser } = require('./notificationService');
 const { transitionOrderStatus } = require('./orderStateService');
+const { saleLabel } = require('../utils/invoiceNumber');
 
 // Payments reach this system two ways, and only two:
 //
@@ -36,7 +37,7 @@ const PAID_STATUS = 'confirmed';
 async function recordStaffPayment(orderId, reviewerId, { method, reference, amount, note }) {
   const { data: order, error: orderErr } = await supabase
     .from('orders')
-    .select('id, order_number, status, customer_id, total_amount, users(email, company_name, phone)')
+    .select('id, order_number, invoice_number, status, customer_id, total_amount, users(email, company_name, phone)')
     .eq('id', orderId)
     .single();
 
@@ -97,7 +98,7 @@ async function recordStaffPayment(orderId, reviewerId, { method, reference, amou
     userId: order.customer_id,
     type: 'order_status_changed',
     title: 'Payment received',
-    message: `We've received your payment for order #${order.order_number}. Your receipt is available in the portal.`,
+    message: `We've received your payment for ${saleLabel(order)}. Your receipt is available in the portal.`,
     relatedType: 'order',
     relatedId: orderId,
     email: order.users?.email,
@@ -125,7 +126,7 @@ async function reviewPayment(paymentId, status, reviewerId) {
 
   const { data: payment, error: findErr } = await supabase
     .from('payments')
-    .select('id, status, customer_id, order_id, users!payments_customer_id_fkey(email, company_name, phone), orders(order_number, status)')
+    .select('id, status, customer_id, order_id, users!payments_customer_id_fkey(email, company_name, phone), orders(order_number, invoice_number, status)')
     .eq('id', paymentId)
     .single();
 
@@ -157,7 +158,7 @@ async function reviewPayment(paymentId, status, reviewerId) {
       userId: payment.customer_id,
       type: 'general',
       title: 'Payment approved',
-      message: `Your payment for order #${payment.orders?.order_number} has been approved. Thank you!`,
+      message: `Your payment for ${saleLabel(payment.orders)} has been approved. Thank you!`,
       relatedType: 'payment',
       relatedId: paymentId,
       email: payment.users?.email,

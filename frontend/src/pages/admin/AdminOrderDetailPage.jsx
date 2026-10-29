@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { getOrderById, updateOrderStatus, setOrderStockEta } from '../../api/orders';
+import { getOrderById, updateOrderStatus, setOrderStockEta, downloadInvoicePdf, emailInvoice } from '../../api/orders';
 import { recordPayment } from '../../api/payments';
 import { formatCurrency, formatDate, formatDay } from '../../utils/formatters';
 import { longestLeadTime } from '../../utils/availability';
 import { displayTotals, lineTotals, vatRateLabel } from '../../utils/vat';
 import { downloadReceiptPdf, getReceiptPayment } from '../../utils/generateReceiptPdf';
+import { saveBlobResponse, blobErrorMessage } from '../../utils/downloadFile';
+import { invoiceLabel, isInvoice, saleTitle } from '../../utils/invoiceNumber';
 import StatusBadge from '../../components/ui/StatusBadge';
 import Spinner from '../../components/ui/Spinner';
 import Button from '../../components/ui/Button';
@@ -115,6 +117,8 @@ export default function AdminOrderDetailPage() {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [pendingStatus, setPendingStatus] = useState(null);
+  const [sending, setSending] = useState(false);
+  const [sentNote, setSentNote] = useState('');
 
   const load = () => getOrderById(id).then(({ data }) => setOrder(data));
 
@@ -154,9 +158,35 @@ export default function AdminOrderDetailPage() {
     await load();
   };
 
+  const handleDownloadInvoice = async () => {
+    setError('');
+    try {
+      saveBlobResponse(await downloadInvoicePdf(order.id), `${invoiceLabel(order.invoice_number)}.pdf`);
+    } catch (err) {
+      setError(await blobErrorMessage(err, 'Could not download the invoice.'));
+    }
+  };
+
+  const handleEmailInvoice = async () => {
+    setError('');
+    setSentNote('');
+    setSending(true);
+    try {
+      const { data } = await emailInvoice(order.id);
+      setSentNote(`Invoice emailed to ${data.to}.`);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Could not email the invoice.');
+    } finally {
+      setSending(false);
+    }
+  };
+
   if (loading) return <Spinner />;
   if (!order) return <p className="text-sm text-slate-500">Order not found.</p>;
 
+  // Staff-made sales are invoices (INV- number): same order underneath.
+  const invoice = isInvoice(order);
+  const title = saleTitle(order);
   const canCancel = CANCELLABLE.includes(order.status);
 
   // Only one payment can be actively submitted/approved at a time (enforced
@@ -180,14 +210,17 @@ export default function AdminOrderDetailPage() {
 
   return (
     <div>
-      <Link to="/admin/orders" className="text-sm text-teal-600 hover:underline">
-        ← Back to orders
+      <Link to={invoice ? '/admin/invoices' : '/admin/orders'} className="text-sm text-teal-600 hover:underline">
+        ← Back to {invoice ? 'invoices' : 'orders'}
       </Link>
 
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="font-display text-xl font-semibold text-ink">
-            Order <span className="font-mono text-base text-slate-400">#{order.order_number}</span>
+            {invoice ? 'Invoice' : 'Order'}{' '}
+            <span className="font-mono text-base text-slate-400">
+              {invoice ? invoiceLabel(order.invoice_number) : `#${order.order_number}`}
+            </span>
           </h1>
           <p className="mt-1 text-sm text-slate-500">
             {order.customer_id ? (
@@ -197,7 +230,7 @@ export default function AdminOrderDetailPage() {
             ) : (
               order.users?.company_name || order.users?.email
             )}{' '}
-            · Placed {formatDate(order.created_at)}
+            · {invoice ? 'Made' : 'Placed'} {formatDate(order.created_at)}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -253,8 +286,21 @@ export default function AdminOrderDetailPage() {
 
       <Card className="mt-6 flex flex-col gap-4 p-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <TotalsSummary totals={displayTotals(order)} className="text-left" />
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           {error && <p className="text-sm text-bad-500">{error}</p>}
+          {sentNote && <p className="text-sm text-good-500">{sentNote}</p>}
+          {invoice && (
+            <>
+              <Button variant="secondary" onClick={handleDownloadInvoice}>
+                Download invoice
+              </Button>
+              {order.status !== 'cancelled' && (
+                <Button variant="secondary" onClick={handleEmailInvoice} loading={sending}>
+                  Email to customer
+                </Button>
+              )}
+            </>
+          )}
           {getReceiptPayment(order) && (
             <Button variant="secondary" onClick={() => downloadReceiptPdf(order)}>
               Download receipt
@@ -272,7 +318,7 @@ export default function AdminOrderDetailPage() {
           ))}
           {canCancel && (
             <Button variant="danger" onClick={handleCancel} disabled={updating}>
-              Cancel order
+              Cancel {invoice ? 'invoice' : 'order'}
             </Button>
           )}
           {actions.length === 0 && !canRecordPayment && WAITING_ON[order.status] && (
@@ -285,7 +331,7 @@ export default function AdminOrderDetailPage() {
         <Modal title="Record a payment" onClose={() => setShowPaymentModal(false)}>
           <RecordPaymentForm
             defaultAmount={order.total_amount}
-            orderNumber={order.order_number}
+            saleName={title}
             onSubmit={handleRecordPayment}
             onCancel={() => setShowPaymentModal(false)}
           />
@@ -294,13 +340,13 @@ export default function AdminOrderDetailPage() {
 
       {showCancelConfirm && (
         <ConfirmDialog
-          title="Cancel this order?"
+          title={`Cancel this ${invoice ? 'invoice' : 'order'}?`}
           message={
             activePayment
-              ? `Order #${order.order_number} will be cancelled, its payment marked cancelled (not paid) and any reserved/decremented stock restored. Refund the customer separately. This can't be undone.`
-              : `Order #${order.order_number} will be cancelled and any reserved/decremented stock will be restored. This can't be undone.`
+              ? `${title} will be cancelled, its payment marked cancelled (not paid) and any reserved/decremented stock restored. Refund the customer separately. This can't be undone.`
+              : `${title} will be cancelled and any reserved/decremented stock will be restored. This can't be undone.`
           }
-          confirmLabel="Cancel order"
+          confirmLabel={`Cancel ${invoice ? 'invoice' : 'order'}`}
           onConfirm={() => applyStatusUpdate('cancelled')}
           onCancel={() => setShowCancelConfirm(false)}
           loading={updating}

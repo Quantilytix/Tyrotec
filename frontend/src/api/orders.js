@@ -4,7 +4,16 @@ export const getCustomerOrders = () => apiClient.get('/orders/my-orders');
 
 export const getOrderById = (id) => apiClient.get(`/orders/${id}`);
 
-export const getAllOrdersAdmin = () => apiClient.get('/orders/admin/all');
+// kind: 'orders' (placed by customers on the portal or WhatsApp) or
+// 'invoices' (staff-made sales, with an INV- number). Omitted: both.
+export const getAllOrdersAdmin = (kind) => apiClient.get('/orders/admin/all', { params: { kind } });
+
+// The tax invoice PDF of a staff-made sale (staff, or the invoice's customer).
+export const downloadInvoicePdf = (orderId) =>
+  apiClient.get(`/orders/${orderId}/invoice-pdf`, { responseType: 'blob' });
+
+// Staff: email the tax invoice PDF to the customer.
+export const emailInvoice = (orderId) => apiClient.post(`/orders/${orderId}/email-invoice`);
 
 export const updateOrderStatus = (id, status) =>
   apiClient.patch(`/orders/${id}/status`, { status });
@@ -26,6 +35,8 @@ export const getOrderStatus = (orderId) => apiClient.get(`/orders/${orderId}/sta
 export const payOrderOnInvoice = (orderId) => apiClient.post(`/orders/${orderId}/pay-on-invoice`);
 
 // Excel export: one sheet of orders (including payment details), one of their
-// line items. Optional source and created-at date range (YYYY-MM-DD).
-export const exportOrdersAdmin = ({ source, from, to } = {}) =>
-  apiClient.get('/orders/admin/export', { params: { source, from, to }, responseType: 'blob' });
+// line items. kind ('orders'/'invoices'), source and search as on screen, plus
+// a created-at date range (YYYY-MM-DD). The table's status filter is a group
+// of stored statuses, which the export doesn't take, so it isn't sent.
+export const exportOrdersAdmin = ({ kind, source, search, from, to } = {}) =>
+  apiClient.get('/orders/admin/export', { params: { kind, source, search, from, to }, responseType: 'blob' });

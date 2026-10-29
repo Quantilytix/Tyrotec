@@ -12,6 +12,7 @@
 // which the outbound checkout signature must instead omit.
 
 const crypto = require('crypto');
+const { invoiceLabel } = require('../utils/invoiceNumber');
 
 function isSandbox() {
   return (process.env.PAYFAST_MODE || 'sandbox') !== 'live';
@@ -121,7 +122,7 @@ function buildCheckoutFields(order, customer) {
     email_address: customer.email,
     m_payment_id: order.id,
     amount: Number(order.total_amount).toFixed(2),
-    item_name: `Order #${order.order_number}`,
+    item_name: order.invoice_number ? `Invoice ${invoiceLabel(order.invoice_number)}` : `Order #${order.order_number}`,
   };
   // Only when there is one: an empty field would still be posted to PayFast.
   const description = itemDescription(order.order_items);

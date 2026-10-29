@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { getOrderById, getOrderStatus, initiatePayfastPayment, payOrderOnInvoice } from '../api/orders';
+import { getOrderById, getOrderStatus, initiatePayfastPayment, payOrderOnInvoice, downloadInvoicePdf } from '../api/orders';
+import { saveBlobResponse, blobErrorMessage } from '../utils/downloadFile';
+import { invoiceLabel, isInvoice, saleTitle } from '../utils/invoiceNumber';
+import { COMPANY } from '../utils/pdfShared';
 import { formatCurrency, formatDate, formatDay } from '../utils/formatters';
 import { availabilityNote, longestLeadTime } from '../utils/availability';
 import { displayTotals, lineTotals, vatRateLabel } from '../utils/vat';
@@ -100,6 +103,8 @@ export default function OrderDetailPage() {
     : null;
   const isStockReserved = order.status === 'stock_reserved';
   const isApproved = order.status === 'approved';
+  // Made by staff from a quote: a tax invoice (INV- number), same order underneath.
+  const invoice = isInvoice(order);
   // PayFast is the only way a customer can pay themselves. Both of these
   // have their stock set aside: reserved at checkout, or approved (by staff,
   // or when stock the order was waiting for arrived). An approved order can
@@ -118,6 +123,15 @@ export default function OrderDetailPage() {
   // Offered here rather than at checkout: everyone takes the same route to
   // get an order, and only an approved account then chooses to be invoiced
   // instead of paying online.
+  const handleDownloadInvoice = async () => {
+    setError('');
+    try {
+      saveBlobResponse(await downloadInvoicePdf(order.id), `${invoiceLabel(order.invoice_number)}.pdf`);
+    } catch (err) {
+      setError(await blobErrorMessage(err, 'Could not download the invoice.'));
+    }
+  };
+
   const handlePayOnInvoice = async () => {
     setError('');
     setSwitchingToInvoice(true);
@@ -154,9 +168,14 @@ export default function OrderDetailPage() {
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="font-display text-xl font-semibold text-ink">
-            Order <span className="font-mono text-base text-slate-400">#{order.order_number}</span>
+            {invoice ? 'Invoice' : 'Order'}{' '}
+            <span className="font-mono text-base text-slate-400">
+              {invoice ? invoiceLabel(order.invoice_number) : `#${order.order_number}`}
+            </span>
           </h1>
-          <p className="mt-1 text-sm text-slate-500">Placed {formatDate(order.created_at)}</p>
+          <p className="mt-1 text-sm text-slate-500">
+            {invoice ? 'Made' : 'Placed'} {formatDate(order.created_at)}
+          </p>
         </div>
         <StatusBadge status={order.status} />
       </div>
@@ -222,11 +241,29 @@ export default function OrderDetailPage() {
       {isApproved && !activePayment && (
         <Card className="mt-6 p-4">
           <p className="text-sm text-slate-600">
-            Your order is approved and its stock is set aside. Choose Pay now to pay with PayFast (card or Instant
-            EFT)
+            {invoice
+              ? `${saleTitle(order)} is ready and its stock is set aside. Choose Pay now to pay with PayFast (card or Instant EFT), or pay by EFT using ${invoiceLabel(order.invoice_number)} as the reference`
+              : 'Your order is approved and its stock is set aside. Choose Pay now to pay with PayFast (card or Instant EFT)'}
             {order.payment_due_at
               ? `. Please pay by ${formatDate(order.payment_due_at)}: after that the stock goes to the next customer.`
               : '.'}
+          </p>
+        </Card>
+      )}
+
+      {invoice && (isApproved || order.status === 'awaiting_payment') && !activePayment && (
+        <Card className="mt-6 p-4">
+          <p className="font-medium text-ink">Pay by EFT</p>
+          <ul className="mt-2 space-y-0.5 text-sm text-slate-600">
+            {COMPANY.bankDetails.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+            <li>
+              Reference: <span className="font-mono font-medium text-ink">{invoiceLabel(order.invoice_number)}</span>
+            </li>
+          </ul>
+          <p className="mt-2 text-xs text-slate-500">
+            Your receipt appears here once the payment reflects in our account.
           </p>
         </Card>
       )}
@@ -247,13 +284,19 @@ export default function OrderDetailPage() {
             <StatusBadge status={`payment_${latestPayment.status}`} />
           )}
           {activePayment && <StatusBadge status={`payment_${activePayment.status}`} />}
+          {invoice && (
+            <Button variant="secondary" onClick={handleDownloadInvoice}>
+              Download invoice
+            </Button>
+          )}
           {hasReceipt && (
             <Button variant="secondary" onClick={() => downloadReceiptPdf(order)}>
               Download receipt
             </Button>
           )}
           {error && <p className="text-sm text-bad-500">{error}</p>}
-          {canPayOnline && user?.can_order_on_account && (
+          {/* An invoice is already invoiced: paying by EFT needs no switch. */}
+          {canPayOnline && user?.can_order_on_account && !invoice && (
             <Button
               variant="secondary"
               onClick={handlePayOnInvoice}

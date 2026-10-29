@@ -179,8 +179,14 @@ describe('buildOrdersWorkbook', () => {
     const sheet = (await roundTrip(buildOrdersWorkbook([ORDER]))).getWorksheet('Orders');
     const values = rowValues(sheet, 2);
 
-    expect(values[4]).toBe('Ready for collection');
+    expect(values[5]).toBe('Ready for collection');
     expect(values).toEqual(expect.arrayContaining(['Payfast', 'Approved', '3365147']));
+  });
+
+  it('shows the invoice number of a staff-made sale, and leaves it blank on an order', async () => {
+    const sheet = (await roundTrip(buildOrdersWorkbook([{ ...ORDER, invoice_number: 7 }, ORDER]))).getWorksheet('Orders');
+    expect(rowValues(sheet, 2)[1]).toBe('INV-0007');
+    expect(rowValues(sheet, 3)[1]).toBeFalsy();
   });
 
   it('marks an unpaid order rather than leaving the payment columns blank', async () => {

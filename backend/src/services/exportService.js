@@ -11,6 +11,7 @@
 
 const ExcelJS = require('exceljs');
 const { displayTotals, lineTotals } = require('../utils/vat');
+const { invoiceLabel } = require('../utils/invoiceNumber');
 
 const CURRENCY_FORMAT = '"R"#,##0.00';
 const DATE_FORMAT = 'yyyy-mm-dd hh:mm';
@@ -211,6 +212,7 @@ function buildOrdersWorkbook(orders) {
     'Orders',
     [
       { header: 'Order number', key: 'order_number', width: 15 },
+      { header: 'Invoice number', key: 'invoice_number', width: 15 },
       { header: 'Date', key: 'created_at', width: 18, format: DATE_FORMAT },
       { header: 'Customer', key: 'customer', width: 30 },
       { header: 'Email', key: 'email', width: 30 },
@@ -229,6 +231,7 @@ function buildOrdersWorkbook(orders) {
       const payment = relevantPayment(order);
       return {
         order_number: order.order_number,
+        invoice_number: order.invoice_number ? invoiceLabel(order.invoice_number) : '',
         created_at: toDate(order.created_at),
         customer: customerName(order),
         email: order.users?.email || '',
