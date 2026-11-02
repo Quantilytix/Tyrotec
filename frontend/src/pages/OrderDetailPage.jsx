@@ -232,8 +232,10 @@ export default function OrderDetailPage() {
                     : `They usually take about ${longestLeadTime(shortLines)} ${
                         longestLeadTime(shortLines) === 1 ? 'day' : 'days'
                       } to arrive.`
-                } We'll let you know as soon as they arrive, and you pay then.`
-              : "Your order is awaiting staff approval. You'll get a notification once it's ready for payment."}
+                } We'll let you know as soon as they arrive${activePayment ? '. Your payment has been received.' : ', and you pay then.'}`
+              : activePayment
+                ? 'Your payment has been received. Your order is awaiting staff approval.'
+                : "Your order is awaiting staff approval. You'll get a notification once it's ready for payment."}
           </p>
         </Card>
       )}

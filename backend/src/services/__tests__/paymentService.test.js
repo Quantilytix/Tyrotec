@@ -1,4 +1,4 @@
-jest.mock('../../config/supabase', () => ({ from: jest.fn() }));
+jest.mock('../../config/supabase', () => ({ from: jest.fn(), rpc: jest.fn() }));
 jest.mock('../notificationService', () => ({ notifyUser: jest.fn() }));
 jest.mock('../orderStateService', () => ({ transitionOrderStatus: jest.fn() }));
 
@@ -179,6 +179,103 @@ describe('recordStaffPayment', () => {
     expect(result.status).toBe(400);
     expect(result.error).toMatch(/Payment recorded, but the order could not be marked as paid/);
     expect(notifyUser).not.toHaveBeenCalled();
+  });
+
+  it('can record a payment without telling the customer', async () => {
+    mockChain();
+
+    const result = await recordStaffPayment('order-1', 'staff-1', {
+      method: 'bank_transfer',
+      reference: 'EFT-8',
+      amount: 1150,
+      notifyCustomer: false,
+    });
+
+    expect(result.orderStatus).toBe('confirmed');
+    expect(notifyUser).not.toHaveBeenCalled();
+  });
+
+  // Paid before approval: the payment goes in first, then approve_order (043)
+  // sees it and marks the order paid -- or, short of stock, leaves it waiting.
+  describe('an order still awaiting approval', () => {
+    const PENDING = { ...ORDER, status: 'pending_approval' };
+
+    // orders lookup -> existing-payment check -> payment insert -> status re-read
+    function mockPending(statusAfter) {
+      const insertBuilder = mockChain({ order: PENDING });
+      supabase.from.mockReturnValueOnce(builder({ single: { data: { status: statusAfter }, error: null } }));
+      return insertBuilder;
+    }
+
+    it('approves it and marks it paid when the stock is there', async () => {
+      const insertBuilder = mockPending('confirmed');
+      supabase.rpc.mockResolvedValue({ error: null });
+
+      const result = await recordStaffPayment('order-1', 'staff-1', {
+        method: 'bank_transfer',
+        reference: 'EFT-9',
+        amount: 1150,
+      });
+
+      expect(insertBuilder.insert).toHaveBeenCalled();
+      expect(supabase.rpc).toHaveBeenCalledWith('approve_order', { p_order_id: 'order-1' });
+      expect(transitionOrderStatus).not.toHaveBeenCalled();
+      expect(result).toMatchObject({ paymentId: 'pay-1', orderStatus: 'confirmed' });
+      expect(notifyUser).toHaveBeenCalledWith(
+        expect.objectContaining({ message: expect.stringMatching(/receipt is available/) })
+      );
+    });
+
+    it('keeps it waiting, already paid, when stock is short', async () => {
+      mockPending('pending_approval');
+      supabase.rpc.mockResolvedValue({
+        error: { message: 'Insufficient stock for product Wire rope (have 0, need 2)' },
+      });
+
+      const result = await recordStaffPayment('order-1', 'staff-1', {
+        method: 'bank_transfer',
+        reference: 'EFT-10',
+        amount: 1150,
+      });
+
+      expect(result.error).toBeUndefined();
+      expect(result.orderStatus).toBe('pending_approval');
+      expect(transitionOrderStatus).not.toHaveBeenCalled();
+      expect(notifyUser).toHaveBeenCalledWith(
+        expect.objectContaining({ message: expect.stringMatching(/aren't in stock yet/) })
+      );
+    });
+
+    // A database without 043 approves it without noticing the payment.
+    it('still marks it paid if approving left it at approved', async () => {
+      mockPending('approved');
+      supabase.rpc.mockResolvedValue({ error: null });
+
+      const result = await recordStaffPayment('order-1', 'staff-1', {
+        method: 'cash',
+        reference: 'R-2',
+        amount: 1150,
+      });
+
+      expect(transitionOrderStatus).toHaveBeenCalledWith('order-1', 'confirmed');
+      expect(result.orderStatus).toBe('confirmed');
+    });
+
+    it('reports an order that changed underneath it, keeping the payment', async () => {
+      const insertBuilder = mockPending('cancelled');
+      supabase.rpc.mockResolvedValue({ error: { message: 'Order is not pending approval (current status: cancelled)' } });
+
+      const result = await recordStaffPayment('order-1', 'staff-1', {
+        method: 'cash',
+        reference: 'R-3',
+        amount: 1150,
+      });
+
+      expect(insertBuilder.insert).toHaveBeenCalled();
+      expect(result.status).toBe(400);
+      expect(result.error).toMatch(/Payment recorded, but the order could not be approved \(it is "cancelled"\)/);
+      expect(notifyUser).not.toHaveBeenCalled();
+    });
   });
 });
 

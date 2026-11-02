@@ -84,7 +84,7 @@ async function notifyStockArrivals() {
     .update({ allocation_notified_at: new Date().toISOString() })
     .not('allocated_at', 'is', null)
     .is('allocation_notified_at', null)
-    .select('id, order_number, invoice_number, customer_id, total_amount, payment_due_at');
+    .select('id, order_number, invoice_number, status, customer_id, total_amount, payment_due_at');
   if (error) throw error;
   if (!claimed || claimed.length === 0) return [];
 
@@ -96,13 +96,18 @@ async function notifyStockArrivals() {
 
   for (const order of claimed) {
     const customer = customerById.get(order.customer_id);
+    // Paid while it waited (043): approving it marked it paid, so there's
+    // nothing left for the customer to do.
+    const paid = order.status === 'confirmed';
     const due = order.payment_due_at ? ` Please pay by ${formatDay(order.payment_due_at)}; after that the stock goes to the next customer.` : '';
     await Promise.all([
       notifyUser({
         userId: order.customer_id,
         type: 'order_status_changed',
         title: 'Your stock has arrived',
-        message: `Good news: the items on your ${saleLabel(order)} have arrived and are set aside for you. Pay now on the Customer Portal with PayFast (card or Instant EFT).${due}`,
+        message: paid
+          ? `Good news: the items on your ${saleLabel(order)} have arrived. It's already paid, so we're getting it ready for you.`
+          : `Good news: the items on your ${saleLabel(order)} have arrived and are set aside for you. Pay now on the Customer Portal with PayFast (card or Instant EFT).${due}`,
         relatedType: 'order',
         relatedId: order.id,
         email: customer?.email,
@@ -111,7 +116,7 @@ async function notifyStockArrivals() {
       notifyInternalTeam({
         type: 'general',
         title: 'Stock given to a waiting order',
-        message: `Order #${order.order_number} (${formatCurrency(order.total_amount)}) was waiting for stock and has been approved automatically now that it's in. Awaiting payment.`,
+        message: `Order #${order.order_number} (${formatCurrency(order.total_amount)}) was waiting for stock and has been approved automatically now that it's in. ${paid ? 'Already paid.' : 'Awaiting payment.'}`,
         relatedType: 'order',
         relatedId: order.id,
       }),
@@ -120,7 +125,9 @@ async function notifyStockArrivals() {
         action: 'order.status_changed',
         entityType: 'order',
         entityId: order.id,
-        description: `Stock arrived for order #${order.order_number}; it moved from "pending_approval" to "approved" and the customer has until ${formatDay(order.payment_due_at)} to pay.`,
+        description: paid
+          ? `Stock arrived for order #${order.order_number}; it was already paid, so it moved from "pending_approval" to "confirmed".`
+          : `Stock arrived for order #${order.order_number}; it moved from "pending_approval" to "approved" and the customer has until ${formatDay(order.payment_due_at)} to pay.`,
       }),
     ]);
   }

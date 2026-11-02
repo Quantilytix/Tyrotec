@@ -14,6 +14,7 @@ const recordPaymentRules = [
   body('method').isString().notEmpty().withMessage('Payment method is required'),
   body('reference').isString().notEmpty().withMessage('Reference number is required'),
   body('amount').isFloat({ min: 0.01 }).withMessage('Amount must be greater than 0'),
+  body('notify_customer').optional().isBoolean().withMessage('notify_customer must be true or false'),
 ];
 
 // Staff only. Customers pay through PayFast (POST /orders/:id/pay) and have

@@ -42,7 +42,8 @@ const CANCELLABLE = ['pending_approval', 'approved', 'processing', 'stock_reserv
 // An order waiting for stock: which lines are short, when staff told the
 // customer it should arrive, and a box to tell them (again). The order is
 // approved automatically, oldest first, once stock covers every line.
-function WaitingForStockCard({ order, shortLines, onSaved }) {
+// paid: the customer paid while it waited, so approving it marks it paid.
+function WaitingForStockCard({ order, shortLines, paid, onSaved }) {
   const [days, setDays] = useState(String(longestLeadTime(shortLines.map((l) => l.products)) || ''));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -74,7 +75,9 @@ function WaitingForStockCard({ order, shortLines, onSaved }) {
         {order.stock_expected_at
           ? `Customer told to expect it around ${formatDay(order.stock_expected_at)}.`
           : 'The customer has not been told when to expect it yet.'}{' '}
-        It's approved automatically once the stock is in, and the customer then has 3 days to pay.
+        {paid
+          ? "It's already paid, and is approved and marked as paid automatically once the stock is in."
+          : "It's approved automatically once the stock is in, and the customer then has 3 days to pay."}
       </p>
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <label htmlFor="stock-eta-days" className="text-sm text-slate-600">
@@ -196,8 +199,10 @@ export default function AdminOrderDetailPage() {
   const latestPayment = order.payments?.length
     ? [...order.payments].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0]
     : null;
+  // 'pending_approval' too: a customer may pay before the order is approved,
+  // or while it waits for stock.
   const canRecordPayment =
-    ['approved', 'stock_reserved', 'awaiting_payment'].includes(order.status) && !activePayment;
+    ['pending_approval', 'approved', 'stock_reserved', 'awaiting_payment'].includes(order.status) && !activePayment;
   const shortLines =
     order.status === 'pending_approval'
       ? (order.order_items || []).filter((item) => item.products && item.quantity > item.products.stock_quantity)
@@ -273,7 +278,9 @@ export default function AdminOrderDetailPage() {
         </table>
       </Card>
 
-      {shortLines.length > 0 && <WaitingForStockCard order={order} shortLines={shortLines} onSaved={load} />}
+      {shortLines.length > 0 && (
+        <WaitingForStockCard order={order} shortLines={shortLines} paid={Boolean(activePayment)} onSaved={load} />
+      )}
 
       {order.status === 'approved' && order.payment_due_at && !activePayment && (
         <Card className="mt-6 p-4">
@@ -332,6 +339,7 @@ export default function AdminOrderDetailPage() {
           <RecordPaymentForm
             defaultAmount={order.total_amount}
             saleName={title}
+            waitingForStock={shortLines.length > 0}
             onSubmit={handleRecordPayment}
             onCancel={() => setShowPaymentModal(false)}
           />

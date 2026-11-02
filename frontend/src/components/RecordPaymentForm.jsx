@@ -18,11 +18,13 @@ const METHODS = [
 ];
 
 // saleName: what's being paid, as shown on its page ("Order #57", "Invoice INV-0003").
-export default function RecordPaymentForm({ defaultAmount, saleName, onSubmit, onCancel }) {
+// waitingForStock: the sale can't be approved yet, so it stays waiting, already paid.
+export default function RecordPaymentForm({ defaultAmount, saleName, waitingForStock = false, onSubmit, onCancel }) {
   const [method, setMethod] = useState('bank_transfer');
   const [reference, setReference] = useState('');
   const [amount, setAmount] = useState(defaultAmount);
   const [note, setNote] = useState('');
+  const [notifyCustomer, setNotifyCustomer] = useState(true);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -31,7 +33,7 @@ export default function RecordPaymentForm({ defaultAmount, saleName, onSubmit, o
     setError('');
     setSaving(true);
     try {
-      await onSubmit({ method, reference, amount: Number(amount), note: note || null });
+      await onSubmit({ method, reference, amount: Number(amount), note: note || null, notify_customer: notifyCustomer });
     } catch (err) {
       setError(err.response?.data?.error || 'Could not record this payment.');
       setSaving(false);
@@ -41,8 +43,17 @@ export default function RecordPaymentForm({ defaultAmount, saleName, onSubmit, o
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700">
-        Only record a payment you have already confirmed in the bank. {saleName} will be
-        marked as <strong>paid</strong> straight away and the customer will be notified.
+        Only record a payment you have already confirmed in the bank.{' '}
+        {waitingForStock ? (
+          <>
+            {saleName} is still waiting for stock: the payment is recorded now, and it's marked as{' '}
+            <strong>paid</strong> as soon as the stock arrives.
+          </>
+        ) : (
+          <>
+            {saleName} will be marked as <strong>paid</strong> straight away.
+          </>
+        )}
       </p>
 
       <div>
@@ -87,6 +98,16 @@ export default function RecordPaymentForm({ defaultAmount, saleName, onSubmit, o
         <label className={LABEL_CLASS}>Note (optional)</label>
         <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} className={FIELD_CLASS} />
       </div>
+
+      <label className="flex items-center gap-2 text-sm text-slate-600">
+        <input
+          type="checkbox"
+          checked={notifyCustomer}
+          onChange={(e) => setNotifyCustomer(e.target.checked)}
+          className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+        />
+        Send the customer a payment confirmation
+      </label>
 
       {error && <p className="rounded-lg bg-bad-50 px-3 py-2 text-sm text-bad-500">{error}</p>}
 

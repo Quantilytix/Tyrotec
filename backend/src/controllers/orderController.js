@@ -61,6 +61,11 @@ const STATUS_NOTIFICATIONS = {
     title: `${kind} approved`,
     message: `Good news, your ${name} has been approved. Pay now on the Customer Portal with PayFast (card or Instant EFT).`,
   }),
+  // Approving an order that was paid before approval confirms it (043).
+  confirmed: (name, kind) => ({
+    title: `${kind} approved`,
+    message: `Good news, your ${name} has been approved. It's already paid, so we're getting it ready for you.`,
+  }),
   cancelled: (name, kind) => ({
     title: `${kind} cancelled`,
     message: `Unfortunately, your ${name} has been cancelled. Contact us if you have any questions.`,
@@ -186,6 +191,9 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
     });
   }
 
+  // What the order ends up as: approving one that was already paid confirms it.
+  let newStatus = status;
+
   if (status === 'approved') {
     // approve_order decrements stock for every item on this order. Snapshot
     // stock before, and check for a low-stock crossing on each affected
@@ -202,6 +210,10 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
 
     const { error } = await supabase.rpc('approve_order', { p_order_id: id });
     if (error) return res.status(400).json({ error: friendlyRpcErrorMessage(error.message) });
+
+    // Paid before it was approved (043): it's now 'confirmed', not waiting for payment.
+    const { data: approved } = await supabase.from('orders').select('status').eq('id', id).single();
+    if (approved?.status) newStatus = approved.status;
 
     const { data: afterProducts } = await supabase
       .from('products')
@@ -223,9 +235,9 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
   }
 
   const kind = order.invoice_number ? 'Invoice' : 'Order';
-  const { title, message } = STATUS_NOTIFICATIONS[status]?.(saleLabel(order), kind) || {
+  const { title, message } = STATUS_NOTIFICATIONS[newStatus]?.(saleLabel(order), kind) || {
     title: `${kind} status updated`,
-    message: `Your ${saleLabel(order)} is now "${status.replace('_', ' ')}".`,
+    message: `Your ${saleLabel(order)} is now "${newStatus.replace('_', ' ')}".`,
   };
 
   // Independent writes to unrelated tables -- run concurrently rather than
@@ -248,11 +260,11 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
       action: 'order.status_changed',
       entityType: 'order',
       entityId: id,
-      description: `${req.user.company_name || req.user.email} changed order #${order.order_number} from "${order.status}" to "${status}".`,
+      description: `${req.user.company_name || req.user.email} changed order #${order.order_number} from "${order.status}" to "${newStatus}".`,
     }),
   ]);
 
-  return res.json({ message: 'Order status updated', orderId: id, status });
+  return res.json({ message: 'Order status updated', orderId: id, status: newStatus });
 });
 
 // Customer only. Order must be theirs and have its stock set aside: reserved

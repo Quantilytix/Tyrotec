@@ -7,16 +7,24 @@ const { logActivity } = require('../services/activityLogService');
 // an EFT, cash on collection, or a purchase order settled offline. Writes the
 // payment as approved and confirms the order in one step (see
 // paymentService.js for why there is no customer-facing version of this).
+// An order still waiting for stock stays waiting, already paid.
 //
 // The customer is resolved from the order itself, never from req.user, since
 // the person recording the payment is a staff member acting on a customer's
 // order.
 const recordPayment = asyncHandler(async (req, res) => {
-  const { order_id, method, reference, amount, note } = req.body;
+  const { order_id, method, reference, amount, note, notify_customer } = req.body;
 
-  const result = await recordStaffPayment(order_id, req.user.id, { method, reference, amount, note });
+  const result = await recordStaffPayment(order_id, req.user.id, {
+    method,
+    reference,
+    amount,
+    note,
+    notifyCustomer: notify_customer !== false,
+  });
   if (result.error) return res.status(result.status).json({ error: result.error });
 
+  const outcome = result.orderStatus === 'confirmed' ? 'marking it as paid' : 'to be marked as paid once its stock is in';
   await logActivity({
     actorId: req.user.id,
     actorRole: req.user.role,
@@ -24,7 +32,7 @@ const recordPayment = asyncHandler(async (req, res) => {
     action: 'payment.recorded',
     entityType: 'payment',
     entityId: result.paymentId,
-    description: `${req.user.company_name || req.user.email} recorded a ${method} payment for ${result.customerLabel}'s order #${result.orderNumber}, marking it as paid.`,
+    description: `${req.user.company_name || req.user.email} recorded a ${method} payment for ${result.customerLabel}'s order #${result.orderNumber}, ${outcome}${notify_customer === false ? ' (customer not notified)' : ''}.`,
   });
 
   return res.status(201).json({ message: 'Payment recorded', ...result });

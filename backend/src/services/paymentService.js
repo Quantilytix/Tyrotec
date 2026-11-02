@@ -25,6 +25,37 @@ const PAYABLE_STATUSES = ['approved', 'stock_reserved', 'awaiting_payment'];
 // single gatekeeper as the PayFast webhook and the admin dropdown.
 const PAID_STATUS = 'confirmed';
 
+// An order still awaiting approval -- usually waiting for stock -- can be paid
+// too: customers often pay up front so Tyrotec can buy the stock in. The
+// payment is written first, then the order approved: approve_order (043)
+// sees the payment and marks the order paid. Without enough stock it
+// refuses, and the order keeps waiting, already paid, until the stock
+// arrives and approves it the same way.
+const PREPAYABLE_STATUS = 'pending_approval';
+
+async function approvePaidOrder(orderId) {
+  const { error: approveErr } = await supabase.rpc('approve_order', { p_order_id: orderId });
+  const shortOfStock = Boolean(approveErr) && /Insufficient stock/i.test(approveErr.message);
+
+  const { data: order, error } = await supabase.from('orders').select('status').eq('id', orderId).single();
+  if (error) throw error;
+
+  if (order.status === PAID_STATUS) return { orderStatus: PAID_STATUS };
+  // approve_order from before 043 leaves a paid order at 'approved'.
+  if (order.status === 'approved') {
+    const transition = await transitionOrderStatus(orderId, PAID_STATUS);
+    if (transition.error) {
+      return { error: `Payment recorded, but the order could not be marked as paid: ${transition.error}`, status: 400 };
+    }
+    return { orderStatus: PAID_STATUS };
+  }
+  if (order.status === PREPAYABLE_STATUS && shortOfStock) return { orderStatus: PREPAYABLE_STATUS };
+  return {
+    error: `Payment recorded, but the order could not be approved (it is "${order.status}"). Check it on the order page.`,
+    status: 400,
+  };
+}
+
 // Staff records a payment they have verified themselves. Unlike the old
 // two-step submit-then-approve dance, this writes the payment already
 // approved and confirms the order in the same call -- the admin looking at
@@ -34,7 +65,10 @@ const PAID_STATUS = 'confirmed';
 // Confirming the order also takes it out of 'stock_reserved', which is what
 // stops the reservation-expiry job from cancelling a legitimately paid
 // order.
-async function recordStaffPayment(orderId, reviewerId, { method, reference, amount, note }) {
+//
+// notifyCustomer: false records it quietly, e.g. money that arrived before
+// the customer had even asked for an invoice.
+async function recordStaffPayment(orderId, reviewerId, { method, reference, amount, note, notifyCustomer = true }) {
   const { data: order, error: orderErr } = await supabase
     .from('orders')
     .select('id, order_number, invoice_number, status, customer_id, total_amount, users(email, company_name, phone)')
@@ -42,7 +76,8 @@ async function recordStaffPayment(orderId, reviewerId, { method, reference, amou
     .single();
 
   if (orderErr || !order) return { error: 'Order not found', status: 404 };
-  if (!PAYABLE_STATUSES.includes(order.status)) {
+  const prepaying = order.status === PREPAYABLE_STATUS;
+  if (!prepaying && !PAYABLE_STATUSES.includes(order.status)) {
     return {
       error: `An order that is "${order.status}" can't take a payment.`,
       status: 400,
@@ -86,29 +121,41 @@ async function recordStaffPayment(orderId, reviewerId, { method, reference, amou
   // The order must follow the money. If this fails the payment row is still
   // correct (it records real money), so surface the problem rather than
   // unwinding it -- staff can move the status by hand from the order page.
-  const transition = await transitionOrderStatus(orderId, PAID_STATUS);
-  if (transition.error) {
-    return {
-      error: `Payment recorded, but the order could not be marked as paid: ${transition.error}`,
-      status: 400,
-    };
+  let orderStatus = PAID_STATUS;
+  if (prepaying) {
+    const approved = await approvePaidOrder(orderId);
+    if (approved.error) return approved;
+    orderStatus = approved.orderStatus;
+  } else {
+    const transition = await transitionOrderStatus(orderId, PAID_STATUS);
+    if (transition.error) {
+      return {
+        error: `Payment recorded, but the order could not be marked as paid: ${transition.error}`,
+        status: 400,
+      };
+    }
   }
 
-  await notifyUser({
-    userId: order.customer_id,
-    type: 'order_status_changed',
-    title: 'Payment received',
-    message: `We've received your payment for ${saleLabel(order)}. Your receipt is available in the portal.`,
-    relatedType: 'order',
-    relatedId: orderId,
-    email: order.users?.email,
-    phone: order.users?.phone,
-  });
+  if (notifyCustomer) {
+    await notifyUser({
+      userId: order.customer_id,
+      type: 'order_status_changed',
+      title: 'Payment received',
+      message:
+        orderStatus === PAID_STATUS
+          ? `We've received your payment for ${saleLabel(order)}. Your receipt is available in the portal.`
+          : `We've received your payment for ${saleLabel(order)}. Some items aren't in stock yet; we'll let you know as soon as they arrive.`,
+      relatedType: 'order',
+      relatedId: orderId,
+      email: order.users?.email,
+      phone: order.users?.phone,
+    });
+  }
 
   return {
     paymentId: payment.id,
     orderNumber: order.order_number,
-    orderStatus: PAID_STATUS,
+    orderStatus,
     customerLabel: order.users?.company_name || order.users?.email,
   };
 }
