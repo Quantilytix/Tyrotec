@@ -10,6 +10,7 @@ import { availabilityNote, longestLeadTime } from '../utils/availability';
 import { displayTotals, lineTotals, vatRateLabel } from '../utils/vat';
 import { downloadReceiptPdf, getReceiptPayment } from '../utils/generateReceiptPdf';
 import StatusBadge from '../components/ui/StatusBadge';
+import { orderDisplayStatus, PAYMENT_BADGE_LABELS } from '../utils/statusLabels';
 import Spinner from '../components/ui/Spinner';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
@@ -177,7 +178,7 @@ export default function OrderDetailPage() {
             {invoice ? 'Made' : 'Placed'} {formatDate(order.created_at)}
           </p>
         </div>
-        <StatusBadge status={order.status} />
+        <StatusBadge status={orderDisplayStatus(order)} />
       </div>
 
       <Card className="mt-6 overflow-x-auto">
@@ -283,9 +284,11 @@ export default function OrderDetailPage() {
         <TotalsSummary totals={displayTotals(order)} className="text-left" />
         <div className="flex items-center gap-3">
           {['rejected', 'cancelled'].includes(latestPayment?.status) && !activePayment && (
-            <StatusBadge status={`payment_${latestPayment.status}`} />
+            <StatusBadge status={`payment_${latestPayment.status}`} label={PAYMENT_BADGE_LABELS[latestPayment.status]} />
           )}
-          {activePayment && <StatusBadge status={`payment_${activePayment.status}`} />}
+          {activePayment && (
+            <StatusBadge status={`payment_${activePayment.status}`} label={PAYMENT_BADGE_LABELS[activePayment.status]} />
+          )}
           {invoice && (
             <Button variant="secondary" onClick={handleDownloadInvoice}>
               Download invoice

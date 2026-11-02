@@ -15,6 +15,7 @@ const STYLES = {
   awaiting_payment: 'bg-amber-50 text-amber-600',
   confirmed: 'bg-teal-50 text-teal-600',
   processing: 'bg-teal-50 text-teal-600',
+  paid_awaiting_stock: 'bg-teal-50 text-teal-600',
   ready_for_collection: 'bg-good-50 text-good-500',
   completed: 'bg-good-50 text-good-500',
   cancelled: 'bg-bad-50 text-bad-500',
@@ -36,6 +37,7 @@ const DOT_STYLES = {
   awaiting_payment: 'bg-amber-500',
   confirmed: 'bg-teal-500',
   processing: 'bg-teal-500',
+  paid_awaiting_stock: 'bg-teal-500',
   ready_for_collection: 'bg-good-500',
   completed: 'bg-good-500',
   cancelled: 'bg-bad-500',
@@ -45,8 +47,9 @@ const DOT_STYLES = {
   payment_cancelled: 'bg-bad-500',
 };
 
-export default function StatusBadge({ status }) {
-  const label = statusLabel(status);
+// label: overrides the wording where the context needs it (a payment's badge beside its order's).
+export default function StatusBadge({ status, label: labelOverride }) {
+  const label = labelOverride || statusLabel(status);
   const style = STYLES[status] || 'bg-slate-100 text-slate-500';
   const dot = DOT_STYLES[status] || 'bg-slate-400';
 

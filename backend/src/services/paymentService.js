@@ -222,4 +222,39 @@ async function reviewPayment(paymentId, status, reviewerId) {
   };
 }
 
-module.exports = { recordStaffPayment, reviewPayment, PAYABLE_STATUSES };
+// Payments that never counted as money received, so taking them off the
+// Payments page hides nothing anyone is owed (044).
+const ARCHIVABLE_STATUSES = ['cancelled', 'rejected'];
+
+// Archive (or restore) a payment: practice payments, mostly. Nothing is
+// deleted -- it stays on its order, in the activity log and in QX.
+async function archivePayment(paymentId, archived) {
+  const { data: payment, error: findErr } = await supabase
+    .from('payments')
+    .select('id, status, archived_at, orders(order_number, invoice_number), users!payments_customer_id_fkey(email, company_name)')
+    .eq('id', paymentId)
+    .single();
+
+  if (findErr || !payment) return { error: 'Payment not found', status: 404 };
+  if (archived && !ARCHIVABLE_STATUSES.includes(payment.status)) {
+    return {
+      error: 'Only cancelled or rejected payments can be archived. To clear a paid one, cancel its order first.',
+      status: 400,
+    };
+  }
+
+  const { error } = await supabase
+    .from('payments')
+    .update({ archived_at: archived ? new Date().toISOString() : null })
+    .eq('id', paymentId);
+  if (error) throw error;
+
+  return {
+    paymentId,
+    archived,
+    saleName: saleLabel(payment.orders),
+    customerLabel: payment.users?.company_name || payment.users?.email,
+  };
+}
+
+module.exports = { recordStaffPayment, reviewPayment, archivePayment, PAYABLE_STATUSES };

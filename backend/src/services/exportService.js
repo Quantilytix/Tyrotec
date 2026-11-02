@@ -83,6 +83,21 @@ function statusLabel(status) {
   return STATUS_LABELS[status] || humanise(status);
 }
 
+const PAYMENT_STATUS_LABELS = {
+  submitted: 'Submitted',
+  approved: 'Paid',
+  rejected: 'Rejected',
+  cancelled: 'Cancelled',
+};
+
+// An order paid while it waits for stock (043) reads as paid, not "Awaiting approval".
+function orderStatusLabel(order) {
+  if (order.status === 'pending_approval' && (order.payments || []).some((p) => p.status === 'approved')) {
+    return 'Paid · awaiting stock';
+  }
+  return statusLabel(order.status);
+}
+
 function buildProductsWorkbook(products) {
   const workbook = new ExcelJS.Workbook();
 
@@ -235,14 +250,14 @@ function buildOrdersWorkbook(orders) {
         created_at: toDate(order.created_at),
         customer: customerName(order),
         email: order.users?.email || '',
-        status: statusLabel(order.status),
+        status: orderStatusLabel(order),
         source: humanise(order.source),
         item_count: (order.order_items || []).length,
         subtotal_amount: displayTotals(order).subtotal_amount,
         vat_amount: displayTotals(order).vat_amount,
         total_amount: displayTotals(order).total_amount,
         payment_method: payment ? humanise(payment.method) : '',
-        payment_status: payment ? humanise(payment.status) : 'Not paid',
+        payment_status: payment ? PAYMENT_STATUS_LABELS[payment.status] || humanise(payment.status) : 'Not paid',
         payment_reference: payment ? payment.gateway_reference || payment.reference || '' : '',
         paid_at: payment ? toDate(payment.verified_at || payment.reviewed_at) : null,
       };
@@ -254,7 +269,7 @@ function buildOrdersWorkbook(orders) {
       order_number: order.order_number,
       created_at: toDate(order.created_at),
       customer: customerName(order),
-      status: statusLabel(order.status),
+      status: orderStatusLabel(order),
       sku: item.products?.sku || '',
       product: item.products?.name || '',
       quantity: item.quantity,

@@ -19,7 +19,11 @@ const SEARCH_INPUT_CLASS =
 // Deliberately not the global CartContext -- that's the logged-in staff
 // member's own personal cart. Reusing it here would cross-wire whatever
 // they're building for a customer with their own in-browser cart.
-export default function AdminNewQuotePage() {
+//
+// asInvoice: "New invoice" on the Invoices page. Same form; the quote it
+// makes is turned straight into an invoice, so staff go from nothing to an
+// invoice in one step.
+export default function AdminNewQuotePage({ asInvoice = false }) {
   const navigate = useNavigate();
 
   const [customerQuery, setCustomerQuery] = useState('');
@@ -43,6 +47,8 @@ export default function AdminNewQuotePage() {
   const [submitting, setSubmitting] = useState(false);
   const [created, setCreated] = useState(null);
   const [error, setError] = useState('');
+  // asInvoice only: the quote was made but converting it failed.
+  const [invoiceError, setInvoiceError] = useState(null);
 
   useEffect(() => {
     if (selectedCustomer || !customerQuery.trim()) {
@@ -197,9 +203,24 @@ export default function AdminNewQuotePage() {
         discount_reason: i.discount_reason,
       }));
       const { data } = await createQuoteForCustomerAdmin(selectedCustomer.id, payload);
+      if (asInvoice) {
+        try {
+          const { data: invoice } = await convertQuoteToOrderAdmin(data.quoteId);
+          navigate(`/admin/invoices/${invoice.orderId}`);
+        } catch (err) {
+          // The quote exists, so don't let a retry make a second one.
+          setInvoiceError({
+            quoteId: data.quoteId,
+            message: `Quote #${data.quoteNumber} was made, but it couldn't be turned into an invoice: ${
+              err.response?.data?.error || 'please try again'
+            }.`,
+          });
+        }
+        return;
+      }
       setCreated({ ...data, total_amount: totals.total_amount });
     } catch (err) {
-      setError(err.response?.data?.error || 'Could not create this quote. Try again.');
+      setError(err.response?.data?.error || `Could not create this ${asInvoice ? 'invoice' : 'quote'}. Try again.`);
       setSubmitting(false);
     }
   };
@@ -215,7 +236,7 @@ export default function AdminNewQuotePage() {
           onView={() => navigate(`/admin/quotes/${created.quoteId}`)}
           onConvert={async () => {
             const { data } = await convertQuoteToOrderAdmin(created.quoteId);
-            navigate(`/admin/orders/${data.orderId}`);
+            navigate(`/admin/invoices/${data.orderId}`);
           }}
           onClose={() => navigate('/admin/quotes')}
         />
@@ -225,12 +246,18 @@ export default function AdminNewQuotePage() {
 
   return (
     <div>
-      <Link to="/admin/quotes" className="text-sm text-teal-600 hover:underline">
-        ← Back to quotes
+      <Link to={asInvoice ? '/admin/invoices' : '/admin/quotes'} className="text-sm text-teal-600 hover:underline">
+        ← Back to {asInvoice ? 'invoices' : 'quotes'}
       </Link>
 
-      <h1 className="mt-3 font-display text-xl font-semibold text-ink">New quote for a customer</h1>
-      <p className="mt-1 text-sm text-slate-500">Pick a customer and add products. The quote is created in their name.</p>
+      <h1 className="mt-3 font-display text-xl font-semibold text-ink">
+        {asInvoice ? 'New invoice for a customer' : 'New quote for a customer'}
+      </h1>
+      <p className="mt-1 text-sm text-slate-500">
+        {asInvoice
+          ? 'Pick a customer and add products. The invoice is made in their name, and its quote is kept under Quotes.'
+          : 'Pick a customer and add products. The quote is created in their name.'}
+      </p>
 
       <Card className="mt-6 p-5">
         <h2 className="font-display text-base font-semibold text-ink">Customer</h2>
@@ -501,13 +528,23 @@ export default function AdminNewQuotePage() {
         <TotalsSummary totals={totals} className="text-left" />
         <div className="flex items-center gap-3">
           {error && <p className="text-sm text-bad-500">{error}</p>}
-          <Button
-            onClick={handleSubmit}
-            loading={submitting}
-            disabled={!selectedCustomer || items.length === 0 || badDiscount}
-          >
-            Create quote
-          </Button>
+          {invoiceError ? (
+            <p className="max-w-md text-sm text-bad-500">
+              {invoiceError.message}{' '}
+              <Link to={`/admin/quotes/${invoiceError.quoteId}`} className="font-medium text-teal-600 hover:underline">
+                Open the quote
+              </Link>{' '}
+              to try Convert to invoice again.
+            </p>
+          ) : (
+            <Button
+              onClick={handleSubmit}
+              loading={submitting}
+              disabled={!selectedCustomer || items.length === 0 || badDiscount}
+            >
+              {asInvoice ? 'Create invoice' : 'Create quote'}
+            </Button>
+          )}
         </div>
       </Card>
     </div>

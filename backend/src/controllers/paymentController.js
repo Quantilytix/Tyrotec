@@ -1,6 +1,6 @@
 const supabase = require('../config/supabase');
 const asyncHandler = require('../utils/asyncHandler');
-const { recordStaffPayment, reviewPayment } = require('../services/paymentService');
+const { recordStaffPayment, reviewPayment, archivePayment } = require('../services/paymentService');
 const { logActivity } = require('../services/activityLogService');
 
 // Staff only: record a payment that has already been verified in the bank --
@@ -38,15 +38,39 @@ const recordPayment = asyncHandler(async (req, res) => {
   return res.status(201).json({ message: 'Payment recorded', ...result });
 });
 
-// Admin/sales_rep only: every payment across all customers.
+// Admin/sales_rep only: every payment across all customers. Archived ones
+// (044) only with ?archived=true, and then only those.
 const getAllPaymentsAdmin = asyncHandler(async (req, res) => {
-  const { data, error } = await supabase
+  let query = supabase
     .from('payments')
-    .select('*, orders(id, order_number, total_amount), users!payments_customer_id_fkey(email, company_name)')
+    .select('*, orders(id, order_number, invoice_number, total_amount), users!payments_customer_id_fkey(email, company_name)')
     .order('created_at', { ascending: false });
+  query = req.query.archived === 'true' ? query.not('archived_at', 'is', null) : query.is('archived_at', null);
 
+  const { data, error } = await query;
   if (error) throw error;
   return res.json(data);
+});
+
+// Admin only. body: { archived: true | false }.
+const setPaymentArchived = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { archived } = req.body;
+
+  const result = await archivePayment(id, archived);
+  if (result.error) return res.status(result.status).json({ error: result.error });
+
+  await logActivity({
+    actorId: req.user.id,
+    actorRole: req.user.role,
+    actorLabel: req.user.company_name || req.user.email,
+    action: archived ? 'payment.archived' : 'payment.restored',
+    entityType: 'payment',
+    entityId: id,
+    description: `${req.user.company_name || req.user.email} ${archived ? 'archived' : 'restored'} ${result.customerLabel}'s payment for ${result.saleName}.`,
+  });
+
+  return res.json({ message: archived ? 'Payment archived' : 'Payment restored', ...result });
 });
 
 // Admin/sales_rep only. Only a 'submitted' payment can be approved/rejected,
@@ -76,4 +100,5 @@ module.exports = {
   recordPayment,
   getAllPaymentsAdmin,
   updatePaymentStatus,
+  setPaymentArchived,
 };

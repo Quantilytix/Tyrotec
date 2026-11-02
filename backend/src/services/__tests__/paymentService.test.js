@@ -353,3 +353,69 @@ describe('reviewPayment', () => {
     expect(result).toEqual({ error: "Status must be 'approved' or 'rejected'.", status: 400 });
   });
 });
+
+describe('archivePayment', () => {
+  let archivePayment;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    supabase.from.mockReset();
+    ({ archivePayment } = require('../paymentService'));
+  });
+
+  const PAYMENT = {
+    id: 'pay-1',
+    status: 'cancelled',
+    archived_at: null,
+    orders: { order_number: 2, invoice_number: 1 },
+    users: { email: 'practice@example.com', company_name: 'Lerato Practice' },
+  };
+
+  // payment lookup -> update
+  function mockArchive(payment = PAYMENT) {
+    const updateBuilder = builder({ resolve: { error: null } });
+    supabase.from
+      .mockReturnValueOnce(builder({ single: { data: payment, error: null } }))
+      .mockReturnValueOnce(updateBuilder);
+    return updateBuilder;
+  }
+
+  it('archives a cancelled payment', async () => {
+    const updateBuilder = mockArchive();
+
+    const result = await archivePayment('pay-1', true);
+
+    expect(updateBuilder.update).toHaveBeenCalledWith({ archived_at: expect.any(String) });
+    expect(result).toMatchObject({ paymentId: 'pay-1', archived: true, saleName: 'invoice INV-0001', customerLabel: 'Lerato Practice' });
+  });
+
+  it('archives a rejected payment', async () => {
+    mockArchive({ ...PAYMENT, status: 'rejected' });
+    expect((await archivePayment('pay-1', true)).error).toBeUndefined();
+  });
+
+  // A paid payment is real money: it has to stay on the Payments page.
+  it('refuses to archive a paid payment', async () => {
+    supabase.from.mockReturnValueOnce(builder({ single: { data: { ...PAYMENT, status: 'approved' }, error: null } }));
+
+    const result = await archivePayment('pay-1', true);
+
+    expect(result.status).toBe(400);
+    expect(result.error).toMatch(/Only cancelled or rejected payments can be archived/);
+    expect(supabase.from).toHaveBeenCalledTimes(1);
+  });
+
+  it('restores an archived payment', async () => {
+    const updateBuilder = mockArchive({ ...PAYMENT, archived_at: '2026-11-02T10:00:00Z' });
+
+    const result = await archivePayment('pay-1', false);
+
+    expect(updateBuilder.update).toHaveBeenCalledWith({ archived_at: null });
+    expect(result.archived).toBe(false);
+  });
+
+  it('404s on an unknown payment', async () => {
+    supabase.from.mockReturnValueOnce(builder({ single: { data: null, error: { message: 'no rows' } } }));
+    expect(await archivePayment('nope', true)).toEqual({ error: 'Payment not found', status: 404 });
+  });
+});

@@ -5,7 +5,13 @@ import apiClient from './client';
 // (see initiatePayfastPayment in api/orders.js).
 export const recordPayment = (payment) => apiClient.post('/payments', payment);
 
-export const getAllPaymentsAdmin = () => apiClient.get('/payments/admin/all');
+// archived: true lists only the archived payments instead.
+export const getAllPaymentsAdmin = ({ archived = false } = {}) =>
+  apiClient.get('/payments/admin/all', { params: archived ? { archived: true } : {} });
 
 export const updatePaymentStatus = (id, status) =>
   apiClient.patch(`/payments/${id}/status`, { status });
+
+// Admin only. Cancelled or rejected payments; archived: false restores one.
+export const setPaymentArchived = (id, archived) =>
+  apiClient.patch(`/payments/${id}/archive`, { archived });

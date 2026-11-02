@@ -180,7 +180,14 @@ describe('buildOrdersWorkbook', () => {
     const values = rowValues(sheet, 2);
 
     expect(values[5]).toBe('Ready for collection');
-    expect(values).toEqual(expect.arrayContaining(['Payfast', 'Approved', '3365147']));
+    expect(values).toEqual(expect.arrayContaining(['Payfast', 'Paid', '3365147']));
+  });
+
+  // Paid while it waits for stock (043): the screen says so, and so does the file.
+  it('calls an order paid while it waits for stock "Paid · awaiting stock"', async () => {
+    const waiting = { ...ORDER, status: 'pending_approval' };
+    const sheet = (await roundTrip(buildOrdersWorkbook([waiting]))).getWorksheet('Orders');
+    expect(rowValues(sheet, 2)[5]).toBe('Paid · awaiting stock');
   });
 
   it('shows the invoice number of a staff-made sale, and leaves it blank on an order', async () => {

@@ -9,6 +9,7 @@ import { downloadReceiptPdf, getReceiptPayment } from '../../utils/generateRecei
 import { saveBlobResponse, blobErrorMessage } from '../../utils/downloadFile';
 import { invoiceLabel, isInvoice, saleTitle } from '../../utils/invoiceNumber';
 import StatusBadge from '../../components/ui/StatusBadge';
+import { orderDisplayStatus, matchesStatusGroup, PAYMENT_BADGE_LABELS } from '../../utils/statusLabels';
 import Spinner from '../../components/ui/Spinner';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
@@ -196,6 +197,7 @@ export default function AdminOrderDetailPage() {
   // server-side); a rejected one doesn't block resubmission -- same rule as
   // the customer's own OrderDetailPage.jsx.
   const activePayment = order.payments?.find((p) => p.status === 'submitted' || p.status === 'approved');
+  const displayStatus = orderDisplayStatus(order);
   const latestPayment = order.payments?.length
     ? [...order.payments].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0]
     : null;
@@ -240,10 +242,13 @@ export default function AdminOrderDetailPage() {
         </div>
         <div className="flex items-center gap-2">
           {['rejected', 'cancelled'].includes(latestPayment?.status) && !activePayment && (
-            <StatusBadge status={`payment_${latestPayment.status}`} />
+            <StatusBadge status={`payment_${latestPayment.status}`} label={PAYMENT_BADGE_LABELS[latestPayment.status]} />
           )}
-          {activePayment && <StatusBadge status={`payment_${activePayment.status}`} />}
-          <StatusBadge status={order.status} />
+          {/* Not when the order's own badge already says it's paid. */}
+          {activePayment && !matchesStatusGroup('paid', displayStatus) && (
+            <StatusBadge status={`payment_${activePayment.status}`} label={PAYMENT_BADGE_LABELS[activePayment.status]} />
+          )}
+          <StatusBadge status={displayStatus} />
         </div>
       </div>
 

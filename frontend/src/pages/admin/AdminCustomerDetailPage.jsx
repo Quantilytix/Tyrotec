@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { getCustomerDetailAdmin, setCustomerAccountTerms } from '../../api/customers';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import StatusBadge from '../../components/ui/StatusBadge';
+import { orderDisplayStatus } from '../../utils/statusLabels';
 import SourceBadge from '../../components/ui/SourceBadge';
 import Spinner from '../../components/ui/Spinner';
 import EmptyState from '../../components/ui/EmptyState';
@@ -151,7 +152,7 @@ export default function AdminCustomerDetailPage() {
                   <td className="px-4 py-3 text-slate-600">{order.order_items?.length || 0} items</td>
                   <td className="px-4 py-3 font-mono font-medium text-ink">{formatCurrency(order.total_amount)}</td>
                   <td className="px-4 py-3"><SourceBadge source={order.source} /></td>
-                  <td className="px-4 py-3"><StatusBadge status={order.status} /></td>
+                  <td className="px-4 py-3"><StatusBadge status={orderDisplayStatus(order)} /></td>
                   <td className="px-4 py-3 text-slate-500">{formatDate(order.created_at)}</td>
                 </tr>
               ))}

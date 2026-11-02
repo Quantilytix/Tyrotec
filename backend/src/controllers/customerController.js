@@ -67,7 +67,7 @@ const getCustomerDetailAdmin = asyncHandler(async (req, res) => {
 
   const { data: orders, error: ordersErr } = await supabase
     .from('orders')
-    .select('*, order_items(*, products(name, sku))')
+    .select('*, order_items(*, products(name, sku)), payments(status)')
     .eq('customer_id', req.params.id)
     .order('created_at', { ascending: false });
   if (ordersErr) throw ordersErr;

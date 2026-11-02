@@ -65,7 +65,7 @@ export default function QuoteCreatedModal({
       ) : (
         <p className="text-sm text-slate-500">
           Send it to {customer?.email || 'the customer'} now, or download the PDF to send yourself. If
-          the price is already agreed, convert it straight to an order.
+          the price is already agreed, turn it straight into an invoice.
         </p>
       )}
 
@@ -93,7 +93,7 @@ export default function QuoteCreatedModal({
         )}
         {onConvert && (
           <Button onClick={handleConvert} loading={converting} disabled={sending}>
-            Convert to order
+            Convert to invoice
           </Button>
         )}
       </div>

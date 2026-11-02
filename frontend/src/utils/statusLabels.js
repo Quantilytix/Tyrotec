@@ -31,16 +31,37 @@ export const STATUS_LABELS = {
   ready_for_collection: 'Ready for collection',
   completed: 'Completed',
   cancelled: 'Cancelled',
+  // Not stored: an order paid while it waits for stock (orderDisplayStatus).
+  paid_awaiting_stock: 'Paid · awaiting stock',
   // payment statuses -- prefixed with payment_ at the call site
-  payment_submitted: 'Payment submitted',
-  payment_approved: 'Payment approved',
-  payment_rejected: 'Payment rejected',
-  payment_cancelled: 'Payment cancelled',
+  payment_submitted: 'Submitted',
+  payment_approved: 'Paid',
+  payment_rejected: 'Rejected',
+  payment_cancelled: 'Cancelled',
 };
 
 export function statusLabel(status) {
   return STATUS_LABELS[status] || status?.replace(/_/g, ' ') || 'unknown';
 }
+
+// The status an order is shown with. Staff can record a payment on an order
+// still waiting for stock (043); it stays 'pending_approval' until the stock
+// arrives, but to anyone reading the screen it's paid.
+export function orderDisplayStatus(order) {
+  if (order?.status === 'pending_approval' && order.payments?.some((p) => p.status === 'approved')) {
+    return 'paid_awaiting_stock';
+  }
+  return order?.status;
+}
+
+// A payment's badge beside its order's, where a bare "Cancelled" would read
+// as the order's status.
+export const PAYMENT_BADGE_LABELS = {
+  submitted: 'Payment submitted',
+  approved: 'Paid',
+  rejected: 'Payment rejected',
+  cancelled: 'Payment cancelled',
+};
 
 export const QUOTE_STATUSES = ['submitted', 'converted', 'expired'];
 
@@ -55,7 +76,7 @@ export const ORDER_STATUS_GROUPS = [
     label: 'Awaiting payment',
     statuses: ['approved', 'stock_reserved', 'awaiting_payment'],
   },
-  { value: 'paid', label: 'Paid', statuses: ['confirmed', 'processing'] },
+  { value: 'paid', label: 'Paid', statuses: ['confirmed', 'processing', 'paid_awaiting_stock'] },
   { value: 'ready', label: 'Ready for collection', statuses: ['ready_for_collection'] },
   { value: 'completed', label: 'Completed', statuses: ['completed'] },
   { value: 'cancelled', label: 'Cancelled', statuses: ['cancelled'] },

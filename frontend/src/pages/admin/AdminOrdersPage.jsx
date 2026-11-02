@@ -5,7 +5,7 @@ import { formatCurrency, formatDate } from '../../utils/formatters';
 import { saveBlobResponse, blobErrorMessage } from '../../utils/downloadFile';
 import { isWithinDateRange } from '../../utils/dateRange';
 import { matchesSearch, recordSearchParts } from '../../utils/searchFilter';
-import { ORDER_STATUS_GROUPS, matchesStatusGroup, statusGroupLabel } from '../../utils/statusLabels';
+import { ORDER_STATUS_GROUPS, matchesStatusGroup, statusGroupLabel, orderDisplayStatus } from '../../utils/statusLabels';
 import ExportModal from '../../components/admin/ExportModal';
 import ListFilters from '../../components/admin/ListFilters';
 import Modal from '../../components/ui/Modal';
@@ -42,7 +42,7 @@ export default function AdminOrdersPage({ kind = 'orders' }) {
       orders.filter(
         (o) =>
           (sourceFilter === 'all' || o.source === sourceFilter) &&
-          matchesStatusGroup(statusFilter, o.status) &&
+          matchesStatusGroup(statusFilter, orderDisplayStatus(o)) &&
           matchesSearch(search, recordSearchParts(o, invoices ? 'invoice_ref' : 'order_number'))
       ),
     [orders, sourceFilter, statusFilter, search]
@@ -91,9 +91,12 @@ export default function AdminOrdersPage({ kind = 'orders' }) {
               : 'Orders customers placed on the portal or WhatsApp.'}
           </p>
         </div>
-        <Button variant="secondary" onClick={() => setShowExport(true)}>
-          Export to Excel
-        </Button>
+        <div className="flex flex-wrap gap-3">
+          <Button variant="secondary" onClick={() => setShowExport(true)}>
+            Export to Excel
+          </Button>
+          {invoices && <Button onClick={() => navigate('/admin/invoices/new')}>New invoice</Button>}
+        </div>
       </div>
 
       {showExport && (
@@ -134,7 +137,7 @@ export default function AdminOrdersPage({ kind = 'orders' }) {
               isFiltering
                 ? `Try a different search, status${invoices ? '' : ' or source'}.`
                 : invoices
-                  ? 'Use Convert to invoice on a quote to make one.'
+                  ? 'Use New invoice, or Convert to invoice on a quote, to make one.'
                   : 'Orders customers place from their quotes will show up here.'
             }
           />
@@ -172,7 +175,7 @@ export default function AdminOrdersPage({ kind = 'orders' }) {
                   <td className="px-4 py-3 text-slate-600">{order.order_items?.length || 0} items</td>
                   <td className="px-4 py-3 font-mono font-medium text-ink">{formatCurrency(order.total_amount)}</td>
                   {!invoices && <td className="px-4 py-3"><SourceBadge source={order.source} /></td>}
-                  <td className="px-4 py-3"><StatusBadge status={order.status} /></td>
+                  <td className="px-4 py-3"><StatusBadge status={orderDisplayStatus(order)} /></td>
                   <td className="px-4 py-3 text-slate-500">{formatDate(order.created_at)}</td>
                 </tr>
               ))}
