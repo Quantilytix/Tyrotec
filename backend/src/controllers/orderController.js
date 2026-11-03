@@ -399,7 +399,7 @@ const emailInvoice = asyncHandler(async (req, res) => {
   const body = [
     `Hi ${customerLabel},`,
     '',
-    `Please find attached tax invoice ${number} for ${total} (incl. VAT).`,
+    `Please find attached invoice ${number} for ${total} (incl. VAT).`,
     '',
     `You can view it and pay online by signing in to the Tyrotec Customer Portal. If you pay by EFT, please use ${number} as the reference.`,
     '',
@@ -408,7 +408,7 @@ const emailInvoice = asyncHandler(async (req, res) => {
   ].join('\n');
 
   try {
-    await sendEmailOrThrow(customer.email, `Your tax invoice ${number} from Tyrotec`, body, {
+    await sendEmailOrThrow(customer.email, `Your invoice ${number} from Tyrotec`, body, {
       attachments: [{ filename: `${number}.pdf`, content: generateInvoicePdfBuffer({ order: invoice, items: invoice.order_items, customer }) }],
     });
   } catch (err) {
@@ -420,7 +420,7 @@ const emailInvoice = asyncHandler(async (req, res) => {
       userId: invoice.customer_id,
       type: 'general',
       title: `Invoice ${number} sent`,
-      message: `We've emailed you tax invoice ${number} for ${total}.`,
+      message: `We've emailed you invoice ${number} for ${total}.`,
       relatedType: 'order',
       relatedId: invoice.id,
     }),
@@ -428,7 +428,7 @@ const emailInvoice = asyncHandler(async (req, res) => {
       action: 'invoice.emailed',
       entityType: 'order',
       entityId: invoice.id,
-      description: `${req.user.company_name || req.user.email} emailed tax invoice ${number} to ${customer.email}.`,
+      description: `${req.user.company_name || req.user.email} emailed invoice ${number} to ${customer.email}.`,
     }),
   ]);
 

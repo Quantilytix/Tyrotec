@@ -240,7 +240,7 @@ export default function AdminQuoteDetailPage() {
       {showConvertConfirm && (
         <ConfirmDialog
           title="Make an invoice for the customer?"
-          message={`Quote #${quote.quote_number} becomes a tax invoice and the stock is set aside for ${
+          message={`Quote #${quote.quote_number} becomes an invoice and the stock is set aside for ${
             quote.users?.company_name || quote.users?.email || 'this customer'
           }. They are told it's ready, and you can email it and record their payment on the invoice. If stock is short it will wait for approval instead.`}
           confirmLabel="Convert to invoice"

@@ -45,7 +45,7 @@ describe('invoicePaymentStatus', () => {
 });
 
 describe('PDFs', () => {
-  it('makes a tax invoice PDF', () => {
+  it('makes an invoice PDF', () => {
     const pdf = generateInvoicePdfBuffer({ order: ORDER, items: ITEMS, customer: { email: 'buyer@example.com' } });
     expect(pdf.subarray(0, 5).toString()).toBe('%PDF-');
   });

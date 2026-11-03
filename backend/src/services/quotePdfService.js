@@ -46,8 +46,9 @@ const COMPANY = {
   ],
 };
 
-// Loaded once at require-time, not per PDF -- it's a small (~15KB) static
-// file that never changes at runtime. Falls back to null (drawHeader then
+// Loaded once at require-time, not per PDF -- it's a small (~100KB) static
+// file that never changes at runtime. Same image as the frontend's
+// public/logo-pdf.png. Falls back to null (drawHeader then
 // draws a plain text monogram instead) if the asset is ever missing, so a
 // packaging mistake degrades the header instead of crashing every quote.
 let LOGO_DATA_URI = null;
@@ -80,6 +81,9 @@ const STATUS_COLORS = {
 
 const MARGIN = 14;
 const PAGE_WIDTH = 210;
+// Header logo, in mm: drawn this tall, and never wider than this.
+const LOGO_HEIGHT = 16;
+const LOGO_MAX_WIDTH = 48;
 
 function formatDate(isoString) {
   return new Date(isoString).toLocaleDateString('en-ZA', { year: 'numeric', month: 'short', day: 'numeric' });
@@ -100,11 +104,18 @@ function drawHeader(doc, title) {
   doc.setFillColor(...INK);
   doc.rect(0, 2, PAGE_WIDTH, 34, 'F');
 
+  // The logo keeps its own proportions at a fixed height, on a white card so
+  // its colours read against the dark band; the name and tagline follow it.
   doc.setFillColor(255, 255, 255);
-  doc.roundedRect(MARGIN, 10, 18, 18, 3, 3, 'F');
+  let textX = MARGIN + 24;
   if (LOGO_DATA_URI) {
-    doc.addImage(LOGO_DATA_URI, 'PNG', MARGIN + 2, 12, 14, 14);
+    const { width, height } = doc.getImageProperties(LOGO_DATA_URI);
+    const logoWidth = Math.min(LOGO_HEIGHT * (width / height), LOGO_MAX_WIDTH);
+    doc.roundedRect(MARGIN, 9, logoWidth + 4, LOGO_HEIGHT + 4, 3, 3, 'F');
+    doc.addImage(LOGO_DATA_URI, 'PNG', MARGIN + 2, 11, logoWidth, LOGO_HEIGHT);
+    textX = MARGIN + logoWidth + 10;
   } else {
+    doc.roundedRect(MARGIN, 10, 18, 18, 3, 3, 'F');
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(13);
     doc.setTextColor(...NAVY);
@@ -114,12 +125,12 @@ function drawHeader(doc, title) {
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(18);
   doc.setTextColor(255, 255, 255);
-  doc.text(COMPANY.name, MARGIN + 24, 19.5);
+  doc.text(COMPANY.name, textX, 19.5);
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8.5);
   doc.setTextColor(...HEADER_TEXT_TINT);
-  doc.text(COMPANY.tagline, MARGIN + 24, 25.5);
+  doc.text(COMPANY.tagline, textX, 25.5);
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(19);
@@ -423,20 +434,20 @@ function invoicePaymentStatus(order) {
   return { label: 'Unpaid', color: AMBER };
 }
 
-// A tax invoice for a staff-made sale (orders.invoice_number, 042). Dated the
+// The invoice for a staff-made sale (orders.invoice_number, 042). Dated the
 // day it became a sale, the same date QX uses.
 function generateInvoicePdfBuffer({ order, items, customer, channel = 'the Tyrotec Customer Portal' }) {
   const number = invoiceLabel(order.invoice_number);
   return renderDocumentPdf(
     {
-      title: 'TAX INVOICE',
+      title: 'INVOICE',
       meta: {
         numberLabel: 'INVOICE NUMBER',
         number,
         date: order.committed_at || order.created_at,
         status: invoicePaymentStatus(order),
       },
-      continued: `Tax invoice ${number}`,
+      continued: `Invoice ${number}`,
       terms: [
         'All prices exclude VAT. VAT is shown per line and in the totals.',
         `Please use ${number} as the reference when paying.`,

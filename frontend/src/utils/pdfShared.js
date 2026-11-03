@@ -51,6 +51,9 @@ const ACCENT_YELLOW = [250, 204, 21]; // tailwind yellow-400, the portal's activ
 
 export const MARGIN = 14;
 export const PAGE_WIDTH = 210;
+// Header logo, in mm: drawn this tall, and never wider than this.
+const LOGO_HEIGHT = 16;
+const LOGO_MAX_WIDTH = 48;
 // Space autoTable must leave clear at the bottom of every page for drawFooter.
 export const FOOTER_CLEARANCE = 26;
 
@@ -76,7 +79,8 @@ function monogram(name) {
 let logoDataUriPromise = null;
 export function getLogoDataUri() {
   if (!logoDataUriPromise) {
-    logoDataUriPromise = fetch('/logo-square.png')
+    // Trimmed and sized for PDFs; the same image as backend/src/assets/logo.png.
+    logoDataUriPromise = fetch('/logo-pdf.png')
       .then((res) => (res.ok ? res.blob() : Promise.reject(new Error('logo fetch failed'))))
       .then(
         (blob) =>
@@ -100,11 +104,18 @@ export function drawHeader(doc, logoDataUri, title) {
   doc.setFillColor(...INK);
   doc.rect(0, 2, PAGE_WIDTH, 34, 'F');
 
+  // The logo keeps its own proportions at a fixed height, on a white card so
+  // its colours read against the dark band; the name and tagline follow it.
   doc.setFillColor(255, 255, 255);
-  doc.roundedRect(MARGIN, 10, 18, 18, 3, 3, 'F');
+  let textX = MARGIN + 24;
   if (logoDataUri) {
-    doc.addImage(logoDataUri, 'PNG', MARGIN + 2, 12, 14, 14);
+    const { width, height } = doc.getImageProperties(logoDataUri);
+    const logoWidth = Math.min(LOGO_HEIGHT * (width / height), LOGO_MAX_WIDTH);
+    doc.roundedRect(MARGIN, 9, logoWidth + 4, LOGO_HEIGHT + 4, 3, 3, 'F');
+    doc.addImage(logoDataUri, 'PNG', MARGIN + 2, 11, logoWidth, LOGO_HEIGHT);
+    textX = MARGIN + logoWidth + 10;
   } else {
+    doc.roundedRect(MARGIN, 10, 18, 18, 3, 3, 'F');
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(13);
     doc.setTextColor(...NAVY);
@@ -114,12 +125,12 @@ export function drawHeader(doc, logoDataUri, title) {
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(18);
   doc.setTextColor(255, 255, 255);
-  doc.text(COMPANY.name, MARGIN + 24, 19.5);
+  doc.text(COMPANY.name, textX, 19.5);
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8.5);
   doc.setTextColor(...HEADER_TEXT_TINT);
-  doc.text(COMPANY.tagline, MARGIN + 24, 25.5);
+  doc.text(COMPANY.tagline, textX, 25.5);
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(19);
