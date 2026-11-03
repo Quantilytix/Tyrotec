@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { getAllCustomersAdmin, createCustomerAdmin } from '../../api/customers';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { getAllCustomersAdmin, createCustomerAdmin, getCustomerDetailAdmin } from '../../api/customers';
 import { getProducts } from '../../api/products';
 import { createQuoteForCustomerAdmin, sendQuoteEmailAdmin, convertQuoteToOrderAdmin } from '../../api/quotes';
 import { downloadQuotePdf } from '../../utils/generateQuotePdf';
@@ -49,6 +49,20 @@ export default function AdminNewQuotePage({ asInvoice = false }) {
   const [error, setError] = useState('');
   // asInvoice only: the quote was made but converting it failed.
   const [invoiceError, setInvoiceError] = useState(null);
+
+  // ?customer=<id> from the Customers list's Actions menu: start with them chosen.
+  const [searchParams] = useSearchParams();
+  const presetCustomerId = searchParams.get('customer');
+  useEffect(() => {
+    if (!presetCustomerId) return;
+    getCustomerDetailAdmin(presetCustomerId)
+      .then(({ data }) =>
+        setSelectedCustomer((current) =>
+          current || { id: data.id, email: data.email, company_name: data.company_name, phone: data.phone }
+        )
+      )
+      .catch(() => {});
+  }, [presetCustomerId]);
 
   useEffect(() => {
     if (selectedCustomer || !customerQuery.trim()) {

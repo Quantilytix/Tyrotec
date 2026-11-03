@@ -67,7 +67,8 @@ const listPurchases = asyncHandler(async (req, res) => {
 
   let query = supabase
     .from('purchases')
-    .select('*, supplier:suppliers(id, name)', { count: 'exact' })
+    // The lines too, so the list can say what was bought.
+    .select('*, supplier:suppliers(id, name), purchase_items(quantity, products(name))', { count: 'exact' })
     .order('purchase_date', { ascending: false })
     .order('purchase_number', { ascending: false })
     .range(from, from + limitNum - 1);

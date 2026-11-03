@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { getPurchases } from '../../api/purchases';
 import { formatCurrency, formatDay } from '../../utils/formatters';
 import Button from '../../components/ui/Button';
@@ -8,7 +8,16 @@ import EmptyState from '../../components/ui/EmptyState';
 import Card from '../../components/ui/Card';
 import Pagination from '../../components/ui/Pagination';
 
+// "2 × Wire rope, +1 more": what a purchase brought in, at a glance. The
+// purchase's own page has every line, quantity and cost.
+function itemsSummary(items = []) {
+  if (items.length === 0) return '';
+  const [first, ...rest] = items;
+  return `${first.quantity} × ${first.products?.name || 'Product'}${rest.length ? `, +${rest.length} more` : ''}`;
+}
+
 export default function AdminPurchasesPage() {
+  const navigate = useNavigate();
   const [purchases, setPurchases] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -74,6 +83,7 @@ export default function AdminPurchasesPage() {
                 <tr>
                   <th className="px-4 py-3">Purchase</th>
                   <th className="px-4 py-3">Supplier</th>
+                  <th className="px-4 py-3">Items</th>
                   <th className="px-4 py-3">Supplier invoice</th>
                   <th className="px-4 py-3">Received</th>
                   <th className="px-4 py-3 text-right">Total (incl. VAT)</th>
@@ -81,13 +91,24 @@ export default function AdminPurchasesPage() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {purchases.map((purchase) => (
-                  <tr key={purchase.id}>
+                  <tr
+                    key={purchase.id}
+                    className="cursor-pointer transition-colors duration-150 hover:bg-slate-50"
+                    onClick={() => navigate(`/admin/purchases/${purchase.id}`)}
+                  >
                     <td className="px-4 py-3 font-mono text-xs">
-                      <Link to={`/admin/purchases/${purchase.id}`} className="text-teal-600 hover:underline">
+                      <Link
+                        to={`/admin/purchases/${purchase.id}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-teal-600 hover:underline"
+                      >
                         #{purchase.purchase_number}
                       </Link>
                     </td>
                     <td className="px-4 py-3 text-ink">{purchase.supplier?.name}</td>
+                    <td className="max-w-xs px-4 py-3 text-slate-600">
+                      <p className="truncate">{itemsSummary(purchase.purchase_items)}</p>
+                    </td>
                     <td className="px-4 py-3 font-mono text-xs text-slate-600">{purchase.supplier_invoice_number}</td>
                     <td className="px-4 py-3 text-slate-500">{formatDay(purchase.purchase_date)}</td>
                     <td className="px-4 py-3 text-right font-mono font-medium text-ink">

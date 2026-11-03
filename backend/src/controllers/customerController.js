@@ -30,7 +30,7 @@ const getAllCustomersAdmin = asyncHandler(async (req, res) => {
 
   let query = supabase
     .from('users')
-    .select('id, email, company_name, created_at, orders(id, status, total_amount, created_at), quotes(id)', {
+    .select('id, email, company_name, can_order_on_account, created_at, orders(id, status, total_amount, created_at), quotes(id)', {
       count: 'exact',
     })
     .eq('role', 'customer')
@@ -95,6 +95,12 @@ const getCustomerDetailAdmin = asyncHandler(async (req, res) => {
 const createCustomerAdmin = asyncHandler(async (req, res) => {
   const { email, company_name, full_name, phone } = req.body;
   if (!email) return res.status(400).json({ error: 'Email is required.' });
+  // Optional, from the Customers page's New customer form: printed on their
+  // quotes and invoices. A VAT number means they're VAT-registered.
+  const vatNumber = String(req.body.vat_number || '').trim() || null;
+  const address = String(req.body.address || '').trim() || null;
+  if (vatNumber && vatNumber.length > 30) return res.status(400).json({ error: 'The VAT number is too long.' });
+  if (address && address.length > 500) return res.status(400).json({ error: 'Keep the address under 500 characters.' });
 
   const { data: existingByEmail } = await supabase.from('users').select('id').eq('email', email).maybeSingle();
   if (existingByEmail) {
@@ -129,10 +135,13 @@ const createCustomerAdmin = asyncHandler(async (req, res) => {
         role: 'customer',
         status: 'approved',
         phone: normalizedPhone,
+        vat_number: vatNumber,
+        is_vat_registered: Boolean(vatNumber),
+        address,
       },
       { onConflict: 'id' }
     )
-    .select('id, email, company_name, full_name, phone')
+    .select('id, email, company_name, full_name, phone, vat_number, address')
     .single();
   if (profileError) throw profileError;
 
