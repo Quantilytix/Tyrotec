@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, useSearchParams, Link, useNavigate } from 'react-router-dom';
 import { sendQuoteEmailAdmin, getQuoteById, updateQuoteStatus, convertQuoteToOrderAdmin, refreshQuote } from '../../api/quotes';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { displayTotals, lineTotals, vatRateLabel } from '../../utils/vat';
-import { downloadQuotePdf } from '../../utils/generateQuotePdf';
+import { downloadSavedQuotePdf } from '../../utils/generateQuotePdf';
 import StatusBadge from '../../components/ui/StatusBadge';
 import Spinner from '../../components/ui/Spinner';
 import Button from '../../components/ui/Button';
@@ -30,12 +30,22 @@ export default function AdminQuoteDetailPage() {
   const [editing, setEditing] = useState(false);
   const [savedNote, setSavedNote] = useState('');
 
+  const [searchParams, setSearchParams] = useSearchParams();
+
   const load = () => getQuoteById(quoteId).then(({ data }) => setQuote(data));
 
   useEffect(() => {
     load().finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quoteId]);
+
+  // ?edit=1 from the Quotes list's Actions menu: open the editor, once.
+  const wantsEdit = searchParams.get('edit') === '1';
+  useEffect(() => {
+    if (!quote || !wantsEdit) return;
+    if (['draft', 'submitted'].includes(quote.status)) setEditing(true);
+    setSearchParams({}, { replace: true });
+  }, [quote, wantsEdit, setSearchParams]);
 
   const handleVoid = async () => {
     setError('');
@@ -108,25 +118,7 @@ export default function AdminQuoteDetailPage() {
     }
   };
 
-  const handleDownload = () => {
-    downloadQuotePdf({
-      items: quote.quote_items.map((item) => ({
-        name: item.products?.name,
-        sku: item.products?.sku,
-        unit_price: item.unit_price,
-        list_price: item.list_price,
-        discount_percent: item.discount_percent,
-        discount_reason: item.discount_reason,
-        quantity: item.quantity,
-        vat_rate: item.vat_rate,
-      })),
-      totals: displayTotals(quote),
-      customer: quote.users,
-      quoteNumber: quote.quote_number,
-      status: quote.status,
-      createdAt: quote.created_at,
-    });
-  };
+  const handleDownload = () => downloadSavedQuotePdf(quote);
 
   return (
     <div>

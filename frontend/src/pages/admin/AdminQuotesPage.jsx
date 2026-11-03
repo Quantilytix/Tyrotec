@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { getAllQuotesAdmin, exportQuotesAdmin } from '../../api/quotes';
+import { getAllQuotesAdmin, exportQuotesAdmin, getQuoteById, sendQuoteEmailAdmin, convertQuoteToOrderAdmin } from '../../api/quotes';
+import { downloadSavedQuotePdf } from '../../utils/generateQuotePdf';
+import ActionMenu from '../../components/ui/ActionMenu';
+import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { saveBlobResponse, blobErrorMessage } from '../../utils/downloadFile';
 import { isWithinDateRange } from '../../utils/dateRange';
@@ -23,6 +26,9 @@ export default function AdminQuotesPage() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [showExport, setShowExport] = useState(false);
+  const [notice, setNotice] = useState(null); // { ok, text } | null
+  const [converting, setConverting] = useState(null); // quote | null
+  const [convertBusy, setConvertBusy] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -30,6 +36,40 @@ export default function AdminQuotesPage() {
       .then(({ data }) => setQuotes(data))
       .finally(() => setLoading(false));
   }, []);
+
+  // A row action's outcome, shown above the table.
+  const run = async (work, success, failure) => {
+    setNotice(null);
+    try {
+      await work();
+      if (success) setNotice({ ok: true, text: success });
+    } catch (err) {
+      setNotice({ ok: false, text: err.response?.data?.error || failure });
+    }
+  };
+
+  // The everyday actions on a row. Marking a quote expired, and updating one
+  // whose discount ended, stay on the quote's own page.
+  const rowActions = (quote) => {
+    const open = ['draft', 'submitted'].includes(quote.status);
+    return [
+      { label: 'Open', onClick: () => navigate(`/admin/quotes/${quote.id}`) },
+      { label: 'Edit', hidden: !open, onClick: () => navigate(`/admin/quotes/${quote.id}?edit=1`) },
+      {
+        label: 'Download PDF',
+        onClick: () =>
+          run(async () => downloadSavedQuotePdf((await getQuoteById(quote.id)).data), null, 'Could not download the quote.'),
+      },
+      {
+        label: 'Email to customer',
+        hidden: !quote.users?.email,
+        onClick: () =>
+          run(() => sendQuoteEmailAdmin(quote.id), `Quote #${quote.quote_number} emailed to ${quote.users.email}.`, 'Could not email the quote.'),
+      },
+      { divider: true },
+      { label: 'Convert to invoice', hidden: !open, onClick: () => setConverting(quote) },
+    ];
+  };
 
   const visibleQuotes = useMemo(
     () =>
@@ -116,6 +156,36 @@ export default function AdminQuotesPage() {
         noun="quotes"
       />
 
+      {notice && (
+        <p className={`mt-4 rounded-lg px-3 py-2 text-sm ${notice.ok ? 'bg-good-50 text-good-500' : 'bg-bad-50 text-bad-500'}`}>
+          {notice.text}
+        </p>
+      )}
+
+      {converting && (
+        <ConfirmDialog
+          title="Convert to invoice?"
+          message={`Quote #${converting.quote_number} becomes an invoice and the stock is set aside for ${
+            converting.users?.company_name || converting.users?.email || 'this customer'
+          }. They are told it's ready, and you can email it and record their payment on the invoice. If stock is short it will wait for approval instead.`}
+          confirmLabel="Convert to invoice"
+          danger={false}
+          loading={convertBusy}
+          onConfirm={async () => {
+            setConvertBusy(true);
+            try {
+              const { data } = await convertQuoteToOrderAdmin(converting.id);
+              navigate(`/admin/invoices/${data.orderId}`);
+            } catch (err) {
+              setNotice({ ok: false, text: err.response?.data?.error || 'Could not convert this quote.' });
+              setConverting(null);
+              setConvertBusy(false);
+            }
+          }}
+          onCancel={() => setConverting(null)}
+        />
+      )}
+
       {loading ? (
         <Spinner />
       ) : visibleQuotes.length === 0 ? (
@@ -141,6 +211,7 @@ export default function AdminQuotesPage() {
                 <th className="px-4 py-3">Source</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">Submitted</th>
+                <th className="px-4 py-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -162,6 +233,9 @@ export default function AdminQuotesPage() {
                   <td className="px-4 py-3"><SourceBadge source={quote.source} /></td>
                   <td className="px-4 py-3"><StatusBadge status={quote.status} /></td>
                   <td className="px-4 py-3 text-slate-500">{formatDate(quote.created_at)}</td>
+                  <td className="px-4 py-3 text-right">
+                    <ActionMenu items={rowActions(quote)} />
+                  </td>
                 </tr>
               ))}
             </tbody>

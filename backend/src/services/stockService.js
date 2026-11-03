@@ -119,6 +119,8 @@ const STAFF_READABLE = [
   /^Only \d+ in stock; can't remove \d+$/,
   /^.+ has no cost yet\. Enter its unit cost\.$/,
   /^Opening stock has already been recorded$/,
+  /^Insufficient stock for product /,
+  /^This order is no longer waiting for stock$/,
   /^These products have stock but no cost: /,
   /^The change must be /,
   /^Say why you are making this correction$/,
@@ -139,6 +141,24 @@ function friendlyStockError(error) {
 
 async function receivePurchase(input, userId) {
   const { data, error } = await supabase.rpc('receive_purchase', {
+    p_supplier_id: input.supplier_id,
+    p_supplier_invoice_number: input.supplier_invoice_number,
+    p_purchase_date: input.purchase_date,
+    p_due_date: input.due_date,
+    p_notes: input.notes,
+    p_lines: input.lines,
+    p_received_by: userId,
+  });
+  if (error) return { error: friendlyStockError(error), status: 400 };
+  return { id: data };
+}
+
+// The stock an order was waiting for has arrived: records the delivery as a
+// purchase and approves the order with it, in one transaction (045).
+// input: validatePurchaseInput's value, existing products only.
+async function receiveStockForOrder(orderId, input, userId) {
+  const { data, error } = await supabase.rpc('receive_stock_for_order', {
+    p_order_id: orderId,
     p_supplier_id: input.supplier_id,
     p_supplier_invoice_number: input.supplier_invoice_number,
     p_purchase_date: input.purchase_date,
@@ -222,6 +242,7 @@ module.exports = {
   correctStockAndCost,
   friendlyStockError,
   receivePurchase,
+  receiveStockForOrder,
   adjustStock,
   recordOpeningStock,
 };

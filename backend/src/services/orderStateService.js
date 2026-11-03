@@ -31,7 +31,9 @@ const ORDER_TRANSITIONS = {
   // Pay-on-invoice. Unlike 'stock_reserved' there is no timer behind this
   // one: nothing moves it but a recorded payment or a staff cancellation.
   awaiting_payment: ['confirmed', 'cancelled'],
-  confirmed: ['ready_for_collection', 'cancelled'],
+  // 'completed' straight from paid: delivered to the customer, never waiting
+  // at the counter.
+  confirmed: ['ready_for_collection', 'completed', 'cancelled'],
   // Collected by the customer: the end of the journey.
   ready_for_collection: ['completed'],
   completed: [],

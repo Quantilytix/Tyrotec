@@ -27,6 +27,11 @@ export const initiatePayfastPayment = (orderId) => apiClient.post(`/orders/${ord
 // arrive, as a number of days from today.
 export const setOrderStockEta = (orderId, days) => apiClient.patch(`/orders/${orderId}/stock-eta`, { days });
 
+// Staff: the stock an order was waiting for has arrived. Records the supplier's
+// delivery as a purchase and approves the order with it.
+// delivery: { supplier_id, supplier_invoice_number, lines: [{ product_id, quantity, unit_cost }] }
+export const receiveStockForOrder = (orderId, delivery) => apiClient.post(`/orders/${orderId}/receive-stock`, delivery);
+
 // Lean, poll-friendly status lookup for OrderStatusPanel.jsx.
 export const getOrderStatus = (orderId) => apiClient.get(`/orders/${orderId}/status`);
 

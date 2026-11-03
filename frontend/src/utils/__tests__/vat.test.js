@@ -84,9 +84,9 @@ describe('displayTotals', () => {
 });
 
 describe('vatRateLabel', () => {
-  it('reads as a percentage, a dash, or "incl." for a legacy line', () => {
+  it('reads as a percentage, None, or "incl." for a legacy line', () => {
     expect(vatRateLabel(15)).toBe('15%');
-    expect(vatRateLabel(0)).toBe('—');
+    expect(vatRateLabel(0)).toBe('None');
     expect(vatRateLabel(null)).toBe('incl.');
     expect(vatRateLabel(undefined)).toBe('incl.');
   });

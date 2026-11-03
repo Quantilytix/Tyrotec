@@ -27,6 +27,8 @@ const createQuoteRules = [
   body('items.*.discount_percent').optional({ values: 'falsy' }).isFloat({ min: 0, max: 99.99 })
     .withMessage('A discount must be from 0% to less than 100%'),
   body('items.*.discount_reason').optional({ values: 'null' }).isString().isLength({ max: 200 }),
+  // Staff only, likewise: charge this line no VAT.
+  body('items.*.no_vat').optional().isBoolean().withMessage('no_vat must be true or false').toBoolean(true),
 ];
 
 const createQuoteForCustomerRules = [

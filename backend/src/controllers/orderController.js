@@ -15,7 +15,9 @@ const { logActivity, logForUser } = require('../services/activityLogService');
 const { friendlyRpcErrorMessage } = require('../utils/rpcErrorMessage');
 const { dbNowMs } = require('../utils/dbClock');
 const { formatCurrency } = require('../utils/formatCurrency');
-const { setStockEta, notifyStockArrivalsSoon } = require('../services/waitingOrderService');
+const { setStockEta, notifyStockArrivals, notifyStockArrivalsSoon } = require('../services/waitingOrderService');
+const { validatePurchaseInput, receiveStockForOrder: receiveStock } = require('../services/stockService');
+const { saToday } = require('../utils/discounts');
 
 // Adds a seconds_remaining to each stock_reservations row, alongside the raw
 // expires_at, so the frontend counts down a plain relative number instead of
@@ -106,7 +108,7 @@ function filterByKind(query, kind) {
 const getAllOrdersAdmin = asyncHandler(async (req, res) => {
   const query = supabase
     .from('orders')
-    .select('*, users(email, company_name), order_items(*), payments(amount, status)')
+    .select('*, users(email, company_name), order_items(*, products(stock_quantity)), payments(amount, status)')
     .order('created_at', { ascending: false });
 
   const { data, error } = await filterByKind(query, req.query.kind);
@@ -362,6 +364,40 @@ const updateStockEta = asyncHandler(async (req, res) => {
   return res.json(result);
 });
 
+// Staff only. The stock an order was waiting for has arrived: records the
+// supplier's delivery as a purchase and approves the order with it (045).
+// body: a purchase (validatePurchaseInput) for products already in the
+// catalogue; purchase_date defaults to today.
+const receiveStockForOrder = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { data: order } = await supabase.from('orders').select('id, order_number, invoice_number').eq('id', id).maybeSingle();
+  if (!order) return res.status(404).json({ error: 'Order not found' });
+
+  const { value, error: invalid } = validatePurchaseInput({
+    ...req.body,
+    purchase_date: req.body.purchase_date || saToday(),
+    notes: req.body.notes || `Stock for ${saleLabel(order)}`,
+  });
+  if (invalid) return res.status(400).json({ error: invalid });
+  if (value.lines.some((line) => !line.product_id)) {
+    return res.status(400).json({ error: 'Every line must be a product on this order.' });
+  }
+
+  const result = await receiveStock(id, value, req.user.id);
+  if (result.error) return res.status(result.status).json({ error: result.error });
+
+  // Tells the customer: pay by the deadline, or (paid already) it's on its way.
+  await notifyStockArrivals();
+  const { data: updated } = await supabase.from('orders').select('status').eq('id', id).single();
+  await logForUser(req.user, {
+    action: 'order.stock_received',
+    entityType: 'order',
+    entityId: id,
+    description: `Recorded stock received for ${saleLabel(order)} (supplier invoice ${value.supplier_invoice_number}); it moved from "pending_approval" to "${updated?.status}".`,
+  });
+  return res.json({ orderId: id, status: updated?.status, purchaseId: result.id });
+});
+
 // An invoice with everything its PDF needs. Staff see any; a customer only
 // their own. Null when there is no such invoice (or it's a plain order).
 async function loadInvoice(id, user) {
@@ -439,6 +475,7 @@ module.exports = {
   getInvoicePdf,
   emailInvoice,
   updateStockEta,
+  receiveStockForOrder,
   payOnInvoice,
   getCustomerOrders,
   getAllOrdersAdmin,

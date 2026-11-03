@@ -62,7 +62,8 @@ describe('orderStateService', () => {
         'awaiting_payment',
         'cancelled',
       ]);
-      expect(allowedNextStatuses('confirmed')).toEqual(['ready_for_collection', 'cancelled']);
+      // Paid, then ready for collection -- or delivered straight away.
+      expect(allowedNextStatuses('confirmed')).toEqual(['ready_for_collection', 'completed', 'cancelled']);
     });
 
     // Pay-on-invoice orders have no reservation and no timer: the only way

@@ -1,7 +1,7 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { formatCurrency } from './formatters';
-import { documentTotals, lineTotals, vatRateLabel } from './vat';
+import { displayTotals, documentTotals, lineTotals, vatRateLabel } from './vat';
 import { discountLabel } from './discounts';
 import {
   COMPANY,
@@ -210,4 +210,26 @@ ${discountLabel(item.discount_percent, item.discount_reason)} (was ${formatCurre
   drawFooters(doc);
 
   doc.save(`quote-${quoteNumber || Date.now()}.pdf`);
+}
+
+// A saved quote, as GET /quotes/:id returns it (quote_items with products,
+// and the customer), as its PDF.
+export function downloadSavedQuotePdf(quote) {
+  return downloadQuotePdf({
+    items: (quote.quote_items || []).map((item) => ({
+      name: item.products?.name,
+      sku: item.products?.sku,
+      unit_price: item.unit_price,
+      list_price: item.list_price,
+      discount_percent: item.discount_percent,
+      discount_reason: item.discount_reason,
+      quantity: item.quantity,
+      vat_rate: item.vat_rate,
+    })),
+    totals: displayTotals(quote),
+    customer: quote.users,
+    quoteNumber: quote.quote_number,
+    status: quote.status,
+    createdAt: quote.created_at,
+  });
 }

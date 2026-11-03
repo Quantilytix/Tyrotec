@@ -32,13 +32,18 @@ function staffLineDiscount(item) {
 //   never can.
 // options.keep: Map product_id -> { percent, reason }, staff discounts to keep
 //   when a customer edits a quote staff discounted.
+// options.keepNoVat: Set of product_ids staff set to no VAT, kept the same way
+//   (a customer's edit, a refreshed quote).
 // Returns { quoteItemsData, totals } or { error, status }.
-async function priceQuoteItems(items, { staff = false, keep = null } = {}) {
+async function priceQuoteItems(items, { staff = false, keep = null, keepNoVat = null } = {}) {
   if (!items || items.length === 0) {
     return { error: 'Quote items are required', status: 400 };
   }
   const merged = new Map();
   const discounts = new Map();
+  // Lines staff chose to charge no VAT on, for an arrangement with this
+  // customer. Staff only, like their discounts.
+  const noVat = new Set();
   for (const item of items) {
     merged.set(item.product_id, (merged.get(item.product_id) || 0) + Number(item.quantity));
     if (staff && !discounts.has(item.product_id)) {
@@ -46,9 +51,13 @@ async function priceQuoteItems(items, { staff = false, keep = null } = {}) {
       if (error) return { error, status: 400 };
       if (discount) discounts.set(item.product_id, discount);
     }
+    if (staff && item.no_vat === true) noVat.add(item.product_id);
   }
   if (!staff && keep) {
     for (const [productId, discount] of keep) if (merged.has(productId)) discounts.set(productId, discount);
+  }
+  if (!staff && keepNoVat) {
+    for (const productId of keepNoVat) if (merged.has(productId)) noVat.add(productId);
   }
 
   const productIds = [...merged.keys()];
@@ -65,7 +74,8 @@ async function priceQuoteItems(items, { staff = false, keep = null } = {}) {
   const productMap = new Map(products.map((p) => [p.id, p]));
 
   // Prices are excl VAT, and the rate comes from the product, never from the
-  // request -- a client can't talk the server out of charging VAT. The rate is
+  // request -- a customer can't talk the server out of charging VAT; only
+  // staff can set a line to none. The rate is
   // stored on the line so the document always states what it actually charged.
   // Likewise a discount: the product's current one, if any, priced here
   // (038), with the original price and reason kept on the line.
@@ -88,7 +98,7 @@ async function priceQuoteItems(items, { staff = false, keep = null } = {}) {
       product_id: productId,
       quantity: merged.get(productId),
       ...price,
-      vat_rate: rateForProduct(product),
+      vat_rate: noVat.has(productId) ? 0 : rateForProduct(product),
     };
   });
 
@@ -99,8 +109,8 @@ async function priceQuoteItems(items, { staff = false, keep = null } = {}) {
 // route and the WhatsApp quoteBuilding flow -- two front doors onto the same
 // pipeline, not two implementations of it. `source` records which one was
 // used (defaults to 'portal' so nothing changes for existing callers).
-async function createQuoteForCustomer(customerId, customerLabel, items, source = 'portal', { staff = false } = {}) {
-  const priced = await priceQuoteItems(items, { staff });
+async function createQuoteForCustomer(customerId, customerLabel, items, source = 'portal', { staff = false, keepNoVat = null } = {}) {
+  const priced = await priceQuoteItems(items, { staff, keepNoVat });
   if (priced.error) return priced;
   const { quoteItemsData } = priced;
   const { subtotal_amount, vat_amount, total_amount } = priced.totals;
@@ -209,19 +219,23 @@ async function updateQuoteItems(quoteId, items, { staff = false } = {}) {
     return { error: 'This quote has already been ordered or has expired, so it can no longer be edited.', status: 400 };
   }
 
-  // A customer's edit keeps the discounts staff gave on the lines still there.
+  // A customer's edit keeps the discounts staff gave, and the lines staff set
+  // to no VAT, on the lines still there.
   let keep = null;
+  let keepNoVat = null;
   if (!staff) {
     const { data: current } = await supabase
       .from('quote_items')
-      .select('product_id, discount_id, discount_percent, discount_reason')
+      .select('product_id, discount_id, discount_percent, discount_reason, vat_rate')
       .eq('quote_id', quoteId);
     keep = new Map((current || [])
       .filter((l) => !l.discount_id && l.discount_percent)
       .map((l) => [l.product_id, { percent: Number(l.discount_percent), reason: l.discount_reason || STAFF_DISCOUNT_REASON }]));
+    // null is a legacy VAT-inclusive line, not "no VAT".
+    keepNoVat = new Set((current || []).filter((l) => l.vat_rate !== null && Number(l.vat_rate) === 0).map((l) => l.product_id));
   }
 
-  const priced = await priceQuoteItems(items, { staff, keep });
+  const priced = await priceQuoteItems(items, { staff, keep, keepNoVat });
   if (priced.error) return priced;
   const { subtotal_amount, vat_amount, total_amount } = priced.totals;
 

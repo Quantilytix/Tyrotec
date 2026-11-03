@@ -306,7 +306,7 @@ const editQuote = asyncHandler(async (req, res) => {
 const refreshQuote = asyncHandler(async (req, res) => {
   let query = supabase
     .from('quotes')
-    .select('id, quote_number, status, customer_id, source, users(email, company_name), quote_items(product_id, quantity)')
+    .select('id, quote_number, status, customer_id, source, users(email, company_name), quote_items(product_id, quantity, vat_rate)')
     .eq('id', req.params.quoteId);
   if (!isStaff(req.user.role)) query = query.eq('customer_id', req.user.id);
 
@@ -318,7 +318,11 @@ const refreshQuote = asyncHandler(async (req, res) => {
 
   const customerLabel = quote.users?.company_name || quote.users?.email || 'Customer';
   const items = (quote.quote_items || []).map((item) => ({ product_id: item.product_id, quantity: item.quantity }));
-  const result = await createQuoteForCustomer(quote.customer_id, customerLabel, items, isStaff(req.user.role) ? 'admin' : quote.source || 'portal');
+  // Lines staff set to no VAT stay that way (null is a legacy VAT-inclusive line).
+  const keepNoVat = new Set(
+    (quote.quote_items || []).filter((i) => i.vat_rate !== null && Number(i.vat_rate) === 0).map((i) => i.product_id)
+  );
+  const result = await createQuoteForCustomer(quote.customer_id, customerLabel, items, isStaff(req.user.role) ? 'admin' : quote.source || 'portal', { keepNoVat });
   if (result.error) return res.status(result.status).json({ error: result.error });
 
   await supabase.from('quotes').update({ status: 'expired' }).eq('id', quote.id).eq('status', 'submitted');

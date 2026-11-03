@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getAllOrdersAdmin, exportOrdersAdmin } from '../../api/orders';
+import { getAllOrdersAdmin, exportOrdersAdmin, downloadInvoicePdf, emailInvoice, updateOrderStatus } from '../../api/orders';
+import { CANCELLABLE, canRecordPayment, shortLinesOf, statusMovesFor } from '../../utils/orderActions';
+import ActionMenu from '../../components/ui/ActionMenu';
+import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { saveBlobResponse, blobErrorMessage } from '../../utils/downloadFile';
 import { isWithinDateRange } from '../../utils/dateRange';
@@ -28,14 +31,71 @@ export default function AdminOrdersPage({ kind = 'orders' }) {
   const [statusFilter, setStatusFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [showExport, setShowExport] = useState(false);
+  const [notice, setNotice] = useState(null); // { ok, text } | null
+  const [cancelling, setCancelling] = useState(null); // order | null
   const navigate = useNavigate();
 
-  useEffect(() => {
+  const load = () =>
     getAllOrdersAdmin(kind)
       // invoice_ref: the INV- number, so it can be searched like it's shown.
-      .then(({ data }) => setOrders(data.map((o) => (o.invoice_number ? { ...o, invoice_ref: invoiceLabel(o.invoice_number) } : o))))
-      .finally(() => setLoading(false));
+      .then(({ data }) => setOrders(data.map((o) => (o.invoice_number ? { ...o, invoice_ref: invoiceLabel(o.invoice_number) } : o))));
+
+  useEffect(() => {
+    load().finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kind]);
+
+  // A row action's outcome, shown above the table.
+  const run = async (work, success, failure) => {
+    setNotice(null);
+    try {
+      await work();
+      if (success) setNotice({ ok: true, text: success });
+    } catch (err) {
+      setNotice({ ok: false, text: err.response?.data?.error || (await blobErrorMessage(err, failure)) });
+    }
+  };
+
+  const changeStatus = (order, status, success) =>
+    run(async () => {
+      await updateOrderStatus(order.id, status);
+      await load();
+    }, success, 'Could not update it.');
+
+  // The everyday actions on a row. The rest (approving, the arrival date,
+  // receipts) stay on the order's own page.
+  const rowActions = (order) => {
+    const page = `/admin/${kind}/${order.id}`;
+    const name = order.invoice_number ? order.invoice_ref : `Order #${order.order_number}`;
+    const live = order.status !== 'cancelled';
+    return [
+      { label: 'Open', onClick: () => navigate(page) },
+      {
+        label: 'Download PDF',
+        hidden: !order.invoice_number,
+        onClick: () =>
+          run(async () => saveBlobResponse(await downloadInvoicePdf(order.id), `${order.invoice_ref}.pdf`), null, 'Could not download the invoice.'),
+      },
+      {
+        label: 'Email to customer',
+        hidden: !order.invoice_number || !live,
+        onClick: () =>
+          run(async () => {
+            const { data } = await emailInvoice(order.id);
+            return data;
+          }, `${name} emailed to ${order.users?.email}.`, 'Could not email the invoice.'),
+      },
+      { divider: true },
+      { label: 'Record payment', hidden: !canRecordPayment(order), onClick: () => navigate(`${page}?action=record-payment`) },
+      { label: 'Stock received…', hidden: shortLinesOf(order).length === 0, onClick: () => navigate(`${page}?action=receive-stock`) },
+      ...statusMovesFor(order).map((move) => ({
+        label: move.label,
+        onClick: () => changeStatus(order, move.status, `${name} updated: ${move.label}.`),
+      })),
+      { divider: true },
+      { label: `Cancel ${invoices ? 'invoice' : 'order'}`, danger: true, hidden: !CANCELLABLE.includes(order.status), onClick: () => setCancelling(order) },
+    ];
+  };
 
   const visibleOrders = useMemo(
     () =>
@@ -127,6 +187,30 @@ export default function AdminOrdersPage({ kind = 'orders' }) {
         sources={invoices ? [] : ['portal', 'whatsapp']}
       />
 
+      {notice && (
+        <p className={`mt-4 rounded-lg px-3 py-2 text-sm ${notice.ok ? 'bg-good-50 text-good-500' : 'bg-bad-50 text-bad-500'}`}>
+          {notice.text}
+        </p>
+      )}
+
+      {cancelling && (
+        <ConfirmDialog
+          title={`Cancel ${cancelling.invoice_ref || `order #${cancelling.order_number}`}?`}
+          message={
+            cancelling.payments?.some((p) => p.status === 'approved' || p.status === 'submitted')
+              ? "It will be cancelled, its payment marked cancelled (not paid) and any reserved stock restored. Refund the customer separately. This can't be undone."
+              : "It will be cancelled and any reserved stock restored. This can't be undone."
+          }
+          confirmLabel={`Cancel ${invoices ? 'invoice' : 'order'}`}
+          onConfirm={async () => {
+            const order = cancelling;
+            setCancelling(null);
+            await changeStatus(order, 'cancelled', `${order.invoice_ref || `Order #${order.order_number}`} cancelled.`);
+          }}
+          onCancel={() => setCancelling(null)}
+        />
+      )}
+
       {loading ? (
         <Spinner />
       ) : visibleOrders.length === 0 ? (
@@ -154,6 +238,7 @@ export default function AdminOrdersPage({ kind = 'orders' }) {
                 {!invoices && <th className="px-4 py-3">Source</th>}
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">{invoices ? 'Date' : 'Placed'}</th>
+                <th className="px-4 py-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -177,6 +262,9 @@ export default function AdminOrdersPage({ kind = 'orders' }) {
                   {!invoices && <td className="px-4 py-3"><SourceBadge source={order.source} /></td>}
                   <td className="px-4 py-3"><StatusBadge status={orderDisplayStatus(order)} /></td>
                   <td className="px-4 py-3 text-slate-500">{formatDate(order.created_at)}</td>
+                  <td className="px-4 py-3 text-right">
+                    <ActionMenu items={rowActions(order)} />
+                  </td>
                 </tr>
               ))}
             </tbody>

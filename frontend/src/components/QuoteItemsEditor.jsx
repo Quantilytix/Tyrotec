@@ -24,6 +24,8 @@ export default function QuoteItemsEditor({ quote, onSaved, onCancel, staff = fal
       quantity: item.quantity,
       // A staff discount already on the line (not a catalogue one).
       discount_percent: !item.discount_id && item.discount_percent ? String(Number(item.discount_percent)) : '',
+      // Charged no VAT (null is a legacy VAT-inclusive line).
+      no_vat: item.vat_rate !== null && item.vat_rate !== undefined && Number(item.vat_rate) === 0,
     }))
   );
   const [discountReason, setDiscountReason] = useState(
@@ -57,7 +59,7 @@ export default function QuoteItemsEditor({ quote, onSaved, onCancel, staff = fal
     setLines((prev) =>
       prev.some((l) => l.product_id === product.id)
         ? prev.map((l) => (l.product_id === product.id ? { ...l, quantity: Number(l.quantity || 0) + 1 } : l))
-        : [...prev, { product_id: product.id, name: product.name, sku: product.sku, quantity: 1, discount_percent: '' }]
+        : [...prev, { product_id: product.id, name: product.name, sku: product.sku, quantity: 1, discount_percent: '', no_vat: false }]
     );
     setQuery('');
     setResults([]);
@@ -81,6 +83,7 @@ export default function QuoteItemsEditor({ quote, onSaved, onCancel, staff = fal
           ...(staff && Number(l.discount_percent) > 0
             ? { discount_percent: Number(l.discount_percent), discount_reason: discountReason.trim() || 'Staff discount' }
             : {}),
+          ...(staff ? { no_vat: l.no_vat } : {}),
         }))
       );
       await onSaved();
@@ -137,6 +140,22 @@ export default function QuoteItemsEditor({ quote, onSaved, onCancel, staff = fal
                   aria-label={`Discount for ${line.name}`}
                   className={`${INPUT} w-20 py-1`}
                 />
+              </label>
+            )}
+            {staff && (
+              <label className="flex items-center gap-2 text-xs text-slate-500">
+                VAT
+                <select
+                  value={line.no_vat ? 'none' : 'standard'}
+                  onChange={(e) =>
+                    setLines((prev) => prev.map((l) => (l.product_id === line.product_id ? { ...l, no_vat: e.target.value === 'none' } : l)))
+                  }
+                  aria-label={`VAT for ${line.name}`}
+                  className={`${INPUT} w-24 py-1`}
+                >
+                  <option value="standard">15%</option>
+                  <option value="none">None</option>
+                </select>
               </label>
             )}
             <button

@@ -79,4 +79,25 @@ describe('priceQuoteItems', () => {
     expect((await priceQuoteItems([])).status).toBe(400);
     expect((await priceQuoteItems([{ product_id: 'nope', quantity: 1 }])).error).toMatch(/not found/);
   });
+
+  // VAT "None": an arrangement staff make with a customer, line by line.
+  it('lets staff charge a line no VAT', async () => {
+    const { quoteItemsData, totals } = await priceQuoteItems(
+      [{ product_id: 'p1', quantity: 2, no_vat: true }, { product_id: 'p3', quantity: 1 }],
+      { staff: true }
+    );
+    expect(quoteItemsData.find((l) => l.product_id === 'p1').vat_rate).toBe(0);
+    expect(quoteItemsData.find((l) => l.product_id === 'p3').vat_rate).toBe(15);
+    expect(totals).toEqual({ subtotal_amount: 2850, vat_amount: 127.5, total_amount: 2977.5 });
+  });
+
+  it('ignores no_vat from a customer', async () => {
+    const { quoteItemsData } = await priceQuoteItems([{ product_id: 'p1', quantity: 1, no_vat: true }]);
+    expect(quoteItemsData[0].vat_rate).toBe(15);
+  });
+
+  it("keeps a staff no-VAT line on a customer's edit", async () => {
+    const { quoteItemsData } = await priceQuoteItems([{ product_id: 'p1', quantity: 3 }], { keepNoVat: new Set(['p1']) });
+    expect(quoteItemsData[0]).toEqual(expect.objectContaining({ quantity: 3, vat_rate: 0 }));
+  });
 });

@@ -67,5 +67,5 @@ export function displayTotals(document) {
 // A legacy line (null rate) says so rather than claiming 0%.
 export function vatRateLabel(vat_rate) {
   if (vat_rate === null || vat_rate === undefined) return 'incl.';
-  return Number(vat_rate) > 0 ? `${Number(vat_rate)}%` : '—';
+  return Number(vat_rate) > 0 ? `${Number(vat_rate)}%` : 'None';
 }

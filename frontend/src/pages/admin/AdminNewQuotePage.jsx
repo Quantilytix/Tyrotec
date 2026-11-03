@@ -141,6 +141,8 @@ export default function AdminNewQuotePage({ asInvoice = false }) {
           list_price: Number(product.unit_price),
           catalogue_price: product.discount ? product.discount.price : Number(product.unit_price),
           vat_rate: rateForProduct(product),
+          // Staff can charge a line no VAT (an arrangement with this customer).
+          no_vat: false,
           quantity: 1,
           discount_percent: '',
         },
@@ -159,6 +161,9 @@ export default function AdminNewQuotePage({ asInvoice = false }) {
   const updateDiscount = (productId, value) =>
     setItems((prev) => prev.map((i) => (i.product_id === productId ? { ...i, discount_percent: value } : i)));
 
+  const updateNoVat = (productId, noVat) =>
+    setItems((prev) => prev.map((i) => (i.product_id === productId ? { ...i, no_vat: noVat } : i)));
+
   // Each line as it will be priced: a staff discount comes off the normal
   // price and replaces any catalogue discount. Preview only -- the server
   // prices the quote again when it is created.
@@ -170,6 +175,9 @@ export default function AdminNewQuotePage({ asInvoice = false }) {
       unit_price: staff ? staffDiscountedPrice(i.list_price, pct) : i.catalogue_price,
       discount_percent: staff ? pct : null,
       discount_reason: staff ? discountReason.trim() || 'Staff discount' : null,
+      // The product's own rate, and what this line charges.
+      product_vat_rate: i.vat_rate,
+      vat_rate: i.no_vat ? 0 : i.vat_rate,
     };
   });
   const badDiscount = items.some((i) => i.discount_percent !== '' && !(Number(i.discount_percent) >= 0 && Number(i.discount_percent) < 100));
@@ -201,6 +209,7 @@ export default function AdminNewQuotePage({ asInvoice = false }) {
         quantity: i.quantity,
         discount_percent: i.discount_percent,
         discount_reason: i.discount_reason,
+        no_vat: i.no_vat,
       }));
       const { data } = await createQuoteForCustomerAdmin(selectedCustomer.id, payload);
       if (asInvoice) {
@@ -488,7 +497,21 @@ export default function AdminNewQuotePage({ asInvoice = false }) {
                         className="w-20 rounded-lg border border-slate-200 px-2 py-1 text-sm outline-none transition-colors duration-150 focus:border-teal-500"
                       />
                     </td>
-                    <td className="py-2 text-slate-600">{vatRateLabel(item.vat_rate)}</td>
+                    <td className="py-2 pr-4 text-slate-600">
+                      {item.product_vat_rate > 0 ? (
+                        <select
+                          value={item.no_vat ? 'none' : 'standard'}
+                          onChange={(e) => updateNoVat(item.product_id, e.target.value === 'none')}
+                          aria-label={`VAT for ${item.name}`}
+                          className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm outline-none transition-colors duration-150 focus:border-teal-500"
+                        >
+                          <option value="standard">{vatRateLabel(item.product_vat_rate)}</option>
+                          <option value="none">None</option>
+                        </select>
+                      ) : (
+                        vatRateLabel(item.vat_rate)
+                      )}
+                    </td>
                     <td className="py-2 font-mono font-medium text-ink">
                       {formatCurrency(lineTotals(item).net)}
                     </td>

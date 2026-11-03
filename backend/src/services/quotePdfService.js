@@ -351,7 +351,7 @@ ${discountLabel(item.discount_percent, item.discount_reason)} (was ${formatCurre
       item.products?.sku || '',
       formatCurrency(item.unit_price),
       String(item.quantity),
-      item.vat_rate === null || item.vat_rate === undefined ? 'incl.' : Number(item.vat_rate) > 0 ? `${Number(item.vat_rate)}%` : '--',
+      item.vat_rate === null || item.vat_rate === undefined ? 'incl.' : Number(item.vat_rate) > 0 ? `${Number(item.vat_rate)}%` : 'None',
       formatCurrency(lineTotals(item).net),
     ]),
     margin: { left: MARGIN, right: MARGIN, bottom: 26 },

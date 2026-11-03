@@ -11,6 +11,7 @@ const {
   getOrderStatus,
   payOnInvoice,
   updateStockEta,
+  receiveStockForOrder,
   getInvoicePdf,
   emailInvoice,
 } = require('../controllers/orderController');
@@ -46,5 +47,9 @@ router.patch(
   validate,
   updateStockEta
 );
+
+// Staff record the delivery an order was waiting for; the order takes it (045).
+// Same roles as recording a purchase.
+router.post('/:id/receive-stock', authenticateToken, requireRole(['admin', 'sales_rep']), receiveStockForOrder);
 
 module.exports = router;

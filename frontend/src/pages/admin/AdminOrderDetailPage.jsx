@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, useSearchParams, Link } from 'react-router-dom';
 import { getOrderById, updateOrderStatus, setOrderStockEta, downloadInvoicePdf, emailInvoice } from '../../api/orders';
 import { recordPayment } from '../../api/payments';
 import { formatCurrency, formatDate, formatDay } from '../../utils/formatters';
@@ -18,27 +18,12 @@ import Card from '../../components/ui/Card';
 import TotalsSummary from '../../components/ui/TotalsSummary';
 import DiscountNote from '../../components/ui/DiscountNote';
 import RecordPaymentForm from '../../components/RecordPaymentForm';
+import ReceiveStockForm from '../../components/admin/ReceiveStockForm';
+import ActionMenu from '../../components/ui/ActionMenu';
+import { CANCELLABLE, activePaymentOf, canRecordPayment as canTakePayment, shortLinesOf, statusMovesFor } from '../../utils/orderActions';
 
-// What staff can actually DO to an order right now, in plain words.
-//
-// This replaced a dropdown listing every legal next status: eight raw
-// database values, in two different vocabularies, that a person had to
-// translate into "what do I click to move this along". Each entry below is
-// one button, and only the buttons that apply to the current status render.
-//
-// Deliberately absent: anything that moves an order to 'confirmed'. An order
-// becomes paid by a verified PayFast payment or by a staff member recording
-// one -- never by picking a status. Likewise 'stock_reserved' and
-// 'awaiting_payment' are set by checkout, not by anybody here.
-const ORDER_ACTIONS = {
-  pending_approval: [{ status: 'approved', label: 'Approve order' }],
-  processing: [{ status: 'completed', label: 'Mark completed' }],
-  confirmed: [{ status: 'ready_for_collection', label: 'Mark ready for collection' }],
-  ready_for_collection: [{ status: 'completed', label: 'Mark collected' }],
-};
-
-// Every order that hasn't finished can be called off.
-const CANCELLABLE = ['pending_approval', 'approved', 'processing', 'stock_reserved', 'awaiting_payment', 'confirmed'];
+// ?action= from the Orders/Invoices lists' Actions menu: open that form.
+const LINKED_ACTIONS = ['record-payment', 'receive-stock'];
 
 // An order waiting for stock: which lines are short, when staff told the
 // customer it should arrive, and a box to tell them (again). The order is
@@ -123,6 +108,8 @@ export default function AdminOrderDetailPage() {
   const [pendingStatus, setPendingStatus] = useState(null);
   const [sending, setSending] = useState(false);
   const [sentNote, setSentNote] = useState('');
+  const [showReceiveStock, setShowReceiveStock] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const load = () => getOrderById(id).then(({ data }) => setOrder(data));
 
@@ -130,6 +117,15 @@ export default function AdminOrderDetailPage() {
     load().finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  // Arrived from a list's Actions menu: open the form it asked for, once.
+  const linkedAction = searchParams.get('action');
+  useEffect(() => {
+    if (!order || !LINKED_ACTIONS.includes(linkedAction)) return;
+    if (linkedAction === 'record-payment' && canTakePayment(order)) setShowPaymentModal(true);
+    if (linkedAction === 'receive-stock' && shortLinesOf(order).length > 0) setShowReceiveStock(true);
+    setSearchParams({}, { replace: true });
+  }, [order, linkedAction, setSearchParams]);
 
   const applyStatusUpdate = async (status) => {
     setError('');
@@ -196,24 +192,20 @@ export default function AdminOrderDetailPage() {
   // Only one payment can be actively submitted/approved at a time (enforced
   // server-side); a rejected one doesn't block resubmission -- same rule as
   // the customer's own OrderDetailPage.jsx.
-  const activePayment = order.payments?.find((p) => p.status === 'submitted' || p.status === 'approved');
+  const activePayment = activePaymentOf(order);
   const displayStatus = orderDisplayStatus(order);
   const latestPayment = order.payments?.length
     ? [...order.payments].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0]
     : null;
-  // 'pending_approval' too: a customer may pay before the order is approved,
-  // or while it waits for stock.
-  const canRecordPayment =
-    ['pending_approval', 'approved', 'stock_reserved', 'awaiting_payment'].includes(order.status) && !activePayment;
-  const shortLines =
-    order.status === 'pending_approval'
-      ? (order.order_items || []).filter((item) => item.products && item.quantity > item.products.stock_quantity)
-      : [];
-  // Approving needs every line in stock, and an order waiting for stock is
-  // approved automatically when it arrives, so the button would only fail.
-  const actions = (ORDER_ACTIONS[order.status] || []).filter(
-    (action) => !(action.status === 'approved' && shortLines.length > 0)
-  );
+  const canRecordPayment = canTakePayment(order);
+  const shortLines = shortLinesOf(order);
+  // The status steps open now, plus "Stock received" for an order short of
+  // stock (approving it would only fail until the stock is in).
+  const statusItems = [
+    ...statusMovesFor(order).map((move) => ({ label: move.label, onClick: () => applyStatusUpdate(move.status) })),
+    { label: 'Stock received…', onClick: () => setShowReceiveStock(true), hidden: shortLines.length === 0 },
+  ];
+  const hasStatusItems = statusItems.some((item) => !item.hidden);
 
   return (
     <div>
@@ -319,21 +311,18 @@ export default function AdminOrderDetailPage() {
             </Button>
           )}
           {canRecordPayment && <Button onClick={() => setShowPaymentModal(true)}>Record payment</Button>}
-          {actions.map((action) => (
-            <Button
-              key={action.status}
-              onClick={() => applyStatusUpdate(action.status)}
-              loading={updating && pendingStatus === null}
-            >
-              {action.label}
-            </Button>
-          ))}
+          {hasStatusItems &&
+            (updating && pendingStatus === null ? (
+              <Button loading>Updating…</Button>
+            ) : (
+              <ActionMenu label="Update status" variant="primary" size="md" items={statusItems} />
+            ))}
           {canCancel && (
             <Button variant="danger" onClick={handleCancel} disabled={updating}>
               Cancel {invoice ? 'invoice' : 'order'}
             </Button>
           )}
-          {actions.length === 0 && !canRecordPayment && WAITING_ON[order.status] && (
+          {!hasStatusItems && !canRecordPayment && WAITING_ON[order.status] && (
             <p className="max-w-sm text-right text-sm text-slate-500">{WAITING_ON[order.status]}</p>
           )}
         </div>
@@ -347,6 +336,22 @@ export default function AdminOrderDetailPage() {
             waitingForStock={shortLines.length > 0}
             onSubmit={handleRecordPayment}
             onCancel={() => setShowPaymentModal(false)}
+          />
+        </Modal>
+      )}
+
+      {showReceiveStock && (
+        <Modal title="Stock received" onClose={() => setShowReceiveStock(false)}>
+          <ReceiveStockForm
+            order={order}
+            shortLines={shortLines}
+            saleName={title}
+            paid={Boolean(activePayment)}
+            onDone={async () => {
+              setShowReceiveStock(false);
+              await load();
+            }}
+            onCancel={() => setShowReceiveStock(false)}
           />
         </Modal>
       )}
