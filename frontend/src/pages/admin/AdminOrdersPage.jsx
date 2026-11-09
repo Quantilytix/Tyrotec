@@ -4,6 +4,12 @@ import { getAllOrdersAdmin, exportOrdersAdmin, downloadInvoicePdf, emailInvoice,
 import { CANCELLABLE, canRecordPayment, shortLinesOf, statusMovesFor } from '../../utils/orderActions';
 import ActionMenu from '../../components/ui/ActionMenu';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
+import DeleteToBinDialog from '../../components/admin/DeleteToBinDialog';
+import { useAuth } from '../../context/AuthContext';
+import { isAdmin } from '../../utils/roles';
+
+// A finished sale can't be deleted (046): it's part of the books.
+const FINISHED = ['completed', 'ready_for_collection'];
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { saveBlobResponse, blobErrorMessage } from '../../utils/downloadFile';
 import { isWithinDateRange } from '../../utils/dateRange';
@@ -33,7 +39,10 @@ export default function AdminOrdersPage({ kind = 'orders' }) {
   const [showExport, setShowExport] = useState(false);
   const [notice, setNotice] = useState(null); // { ok, text } | null
   const [cancelling, setCancelling] = useState(null); // order | null
+  const [deleting, setDeleting] = useState(null); // order | null
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const canDelete = isAdmin(user?.role);
 
   const load = () =>
     getAllOrdersAdmin(kind)
@@ -94,6 +103,8 @@ export default function AdminOrdersPage({ kind = 'orders' }) {
       })),
       { divider: true },
       { label: `Cancel ${invoices ? 'invoice' : 'order'}`, danger: true, hidden: !CANCELLABLE.includes(order.status), onClick: () => setCancelling(order) },
+      // Admins; never a finished sale (it's in the books).
+      { label: 'Delete', danger: true, hidden: !canDelete || FINISHED.includes(order.status), onClick: () => setDeleting(order) },
     ];
   };
 
@@ -208,6 +219,30 @@ export default function AdminOrdersPage({ kind = 'orders' }) {
             await changeStatus(order, 'cancelled', `${order.invoice_ref || `Order #${order.order_number}`} cancelled.`);
           }}
           onCancel={() => setCancelling(null)}
+        />
+      )}
+
+      {deleting && (
+        <DeleteToBinDialog
+          type="order"
+          id={deleting.id}
+          name={deleting.invoice_ref || `order #${deleting.order_number}`}
+          what={
+            deleting.status === 'cancelled'
+              ? ''
+              : `It isn't cancelled yet, so deleting cancels it first: its stock goes back${
+                  deleting.payments?.some((p) => p.status === 'approved' || p.status === 'submitted')
+                    ? ' and its payment is marked cancelled (refund the customer separately)'
+                    : ''
+                }. The customer isn't told; use Cancel instead if they should be.`
+          }
+          onDeleted={async () => {
+            const name = deleting.invoice_ref || `Order #${deleting.order_number}`;
+            setDeleting(null);
+            setNotice({ ok: true, text: `${name} moved to Recently deleted.` });
+            await load();
+          }}
+          onCancel={() => setDeleting(null)}
         />
       )}
 

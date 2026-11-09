@@ -43,7 +43,9 @@ const recordPayment = asyncHandler(async (req, res) => {
 const getAllPaymentsAdmin = asyncHandler(async (req, res) => {
   let query = supabase
     .from('payments')
-    .select('*, orders(id, order_number, invoice_number, total_amount), users!payments_customer_id_fkey(email, company_name)')
+    .select('*, orders!inner(id, order_number, invoice_number, total_amount), users!payments_customer_id_fkey(email, company_name)')
+    // Not the payments of an order or invoice in Recently deleted (046).
+    .is('orders.deleted_at', null)
     .order('created_at', { ascending: false });
   query = req.query.archived === 'true' ? query.not('archived_at', 'is', null) : query.is('archived_at', null);
 

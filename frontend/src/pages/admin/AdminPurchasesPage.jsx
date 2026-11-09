@@ -7,6 +7,10 @@ import Spinner from '../../components/ui/Spinner';
 import EmptyState from '../../components/ui/EmptyState';
 import Card from '../../components/ui/Card';
 import Pagination from '../../components/ui/Pagination';
+import ActionMenu from '../../components/ui/ActionMenu';
+import DeleteToBinDialog from '../../components/admin/DeleteToBinDialog';
+import { useAuth } from '../../context/AuthContext';
+import { isAdmin } from '../../utils/roles';
 
 // "2 × Wire rope, +1 more": what a purchase brought in, at a glance. The
 // purchase's own page has every line, quantity and cost.
@@ -18,6 +22,10 @@ function itemsSummary(items = []) {
 
 export default function AdminPurchasesPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const canDelete = isAdmin(user?.role);
+  const [deleting, setDeleting] = useState(null); // purchase | null
+  const [notice, setNotice] = useState(null); // { ok, text } | null
   const [purchases, setPurchases] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -66,6 +74,28 @@ export default function AdminPurchasesPage() {
         </div>
       </div>
 
+      {notice && (
+        <p className={`mt-4 rounded-lg px-3 py-2 text-sm ${notice.ok ? 'bg-good-50 text-good-500' : 'bg-bad-50 text-bad-500'}`}>
+          {notice.text}
+        </p>
+      )}
+
+      {deleting && (
+        <DeleteToBinDialog
+          type="purchase"
+          id={deleting.id}
+          name={`purchase #${deleting.purchase_number}`}
+          what="Its stock comes back off the shelf and its cost is taken back out of the products' average cost; it's also removed from your books in QX. Restoring puts it all back. A purchase whose stock has already been sold can't be deleted: correct the stock instead."
+          onDeleted={() => {
+            setPurchases((prev) => prev.filter((p) => p.id !== deleting.id));
+            setTotal((t) => Math.max(t - 1, 0));
+            setNotice({ ok: true, text: `Purchase #${deleting.purchase_number} moved to Recently deleted.` });
+            setDeleting(null);
+          }}
+          onCancel={() => setDeleting(null)}
+        />
+      )}
+
       {loading ? (
         <Spinner />
       ) : purchases.length === 0 ? (
@@ -87,6 +117,7 @@ export default function AdminPurchasesPage() {
                   <th className="px-4 py-3">Supplier invoice</th>
                   <th className="px-4 py-3">Received</th>
                   <th className="px-4 py-3 text-right">Total (incl. VAT)</th>
+                  <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -113,6 +144,15 @@ export default function AdminPurchasesPage() {
                     <td className="px-4 py-3 text-slate-500">{formatDay(purchase.purchase_date)}</td>
                     <td className="px-4 py-3 text-right font-mono font-medium text-ink">
                       {formatCurrency(purchase.total_amount)}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <ActionMenu
+                        items={[
+                          { label: 'Open', onClick: () => navigate(`/admin/purchases/${purchase.id}`) },
+                          // Admins; refused once its stock has been sold.
+                          { label: 'Delete', danger: true, hidden: !canDelete, onClick: () => setDeleting(purchase) },
+                        ]}
+                      />
                     </td>
                   </tr>
                 ))}

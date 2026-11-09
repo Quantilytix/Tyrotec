@@ -43,7 +43,7 @@ export default function AdminQuoteDetailPage() {
   const wantsEdit = searchParams.get('edit') === '1';
   useEffect(() => {
     if (!quote || !wantsEdit) return;
-    if (['draft', 'submitted'].includes(quote.status)) setEditing(true);
+    if (!quote.deleted_at && ['draft', 'submitted'].includes(quote.status)) setEditing(true);
     setSearchParams({}, { replace: true });
   }, [quote, wantsEdit, setSearchParams]);
 
@@ -96,8 +96,11 @@ export default function AdminQuoteDetailPage() {
   if (!quote) return <p className="text-sm text-slate-500">Quote not found.</p>;
 
   const discountEnded = quote.quote_items?.some((item) => item.discount_ended);
-  const canExpire = ['draft', 'submitted'].includes(quote.status);
-  const canConvert = ['draft', 'submitted'].includes(quote.status) && !discountEnded;
+  // In Recently deleted (046): look, don't touch -- restore it first.
+  const inBin = Boolean(quote.deleted_at);
+  const open = !inBin && ['draft', 'submitted'].includes(quote.status);
+  const canExpire = open;
+  const canConvert = open && !discountEnded;
 
   // The PDF is how a quote reaches a customer who doesn't use the portal:
   // staff send it however they already do (email, WhatsApp, printed for a
@@ -125,6 +128,16 @@ export default function AdminQuoteDetailPage() {
       <Link to="/admin/quotes" className="text-sm text-teal-600 hover:underline">
         ← Back to quotes
       </Link>
+
+      {inBin && (
+        <p className="mt-4 rounded-lg bg-bad-50 px-3 py-2 text-sm text-bad-500">
+          This quote is in{' '}
+          <Link to="/admin/recently-deleted" className="font-medium underline">
+            Recently deleted
+          </Link>
+          . Restore it there to work on it again.
+        </p>
+      )}
 
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
         <div>
@@ -204,7 +217,7 @@ export default function AdminQuoteDetailPage() {
           <Button variant="secondary" onClick={handleEmail} loading={sending} disabled={!quote.users?.email}>
             {emailedTo ? 'Send again' : 'Email to customer'}
           </Button>
-          {['draft', 'submitted'].includes(quote.status) && (
+          {open && (
             <Button variant="secondary" onClick={() => { setSavedNote(''); setEditing(true); }}>
               Edit quote
             </Button>
@@ -219,7 +232,7 @@ export default function AdminQuoteDetailPage() {
               Convert to invoice
             </Button>
           )}
-          {quote.status === 'submitted' && discountEnded && (
+          {open && quote.status === 'submitted' && discountEnded && (
             <Button onClick={handleRefresh} loading={refreshing}>
               Discount ended: get updated quote
             </Button>

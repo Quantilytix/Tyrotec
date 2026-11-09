@@ -9,3 +9,9 @@ export const formatDate = (isoString) =>
 // A calendar date ('YYYY-MM-DD', no time), shown without shifting a day across timezones.
 export const formatDay = (date) =>
   date ? new Intl.DateTimeFormat('en-ZA', { dateStyle: 'medium' }).format(new Date(`${date}T00:00:00`)) : '—';
+
+// The South African calendar day a moment (an ISO timestamp) falls on, wherever the viewer is.
+export const formatSaDay = (isoString) =>
+  isoString
+    ? new Intl.DateTimeFormat('en-ZA', { dateStyle: 'medium', timeZone: 'Africa/Johannesburg' }).format(new Date(isoString))
+    : '—';

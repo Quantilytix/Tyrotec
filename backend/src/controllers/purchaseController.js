@@ -69,6 +69,8 @@ const listPurchases = asyncHandler(async (req, res) => {
     .from('purchases')
     // The lines too, so the list can say what was bought.
     .select('*, supplier:suppliers(id, name), purchase_items(quantity, products(name))', { count: 'exact' })
+    // Not ones in Recently deleted (046).
+    .is('deleted_at', null)
     .order('purchase_date', { ascending: false })
     .order('purchase_number', { ascending: false })
     .range(from, from + limitNum - 1);

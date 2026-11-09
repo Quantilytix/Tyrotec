@@ -187,7 +187,9 @@ export default function AdminOrderDetailPage() {
   // Staff-made sales are invoices (INV- number): same order underneath.
   const invoice = isInvoice(order);
   const title = saleTitle(order);
-  const canCancel = CANCELLABLE.includes(order.status);
+  // In Recently deleted (046): look, don't touch -- restore it first.
+  const inBin = Boolean(order.deleted_at);
+  const canCancel = !inBin && CANCELLABLE.includes(order.status);
 
   // Only one payment can be actively submitted/approved at a time (enforced
   // server-side); a rejected one doesn't block resubmission -- same rule as
@@ -197,7 +199,7 @@ export default function AdminOrderDetailPage() {
   const latestPayment = order.payments?.length
     ? [...order.payments].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0]
     : null;
-  const canRecordPayment = canTakePayment(order);
+  const canRecordPayment = !inBin && canTakePayment(order);
   const shortLines = shortLinesOf(order);
   // The status steps open now, plus "Stock received" for an order short of
   // stock (approving it would only fail until the stock is in).
@@ -205,7 +207,7 @@ export default function AdminOrderDetailPage() {
     ...statusMovesFor(order).map((move) => ({ label: move.label, onClick: () => applyStatusUpdate(move.status) })),
     { label: 'Stock received…', onClick: () => setShowReceiveStock(true), hidden: shortLines.length === 0 },
   ];
-  const hasStatusItems = statusItems.some((item) => !item.hidden);
+  const hasStatusItems = !inBin && statusItems.some((item) => !item.hidden);
 
   return (
     <div>
@@ -243,6 +245,16 @@ export default function AdminOrderDetailPage() {
           <StatusBadge status={displayStatus} />
         </div>
       </div>
+
+      {inBin && (
+        <p className="mt-4 rounded-lg bg-bad-50 px-3 py-2 text-sm text-bad-500">
+          This {invoice ? 'invoice' : 'order'} is in{' '}
+          <Link to="/admin/recently-deleted" className="font-medium underline">
+            Recently deleted
+          </Link>
+          . Restore it there to work on it again.
+        </p>
+      )}
 
       <Card className="mt-6 overflow-x-auto">
         <table className="w-full min-w-[640px] text-sm">

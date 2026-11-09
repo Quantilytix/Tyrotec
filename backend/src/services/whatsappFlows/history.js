@@ -31,6 +31,7 @@ async function startQuotes(conversation) {
     .from('quotes')
     .select('id, quote_number, status, total_amount, created_at')
     .eq('customer_id', user_id)
+    .is('deleted_at', null) // not in Recently deleted (046)
     .order('created_at', { ascending: false })
     .limit(10); // same list cap/simplification used everywhere else -- most recent 10, no pagination
 
@@ -106,6 +107,7 @@ async function startOrders(conversation) {
     .from('orders')
     .select('id, order_number, status, total_amount, created_at')
     .eq('customer_id', user_id)
+    .is('deleted_at', null)
     .order('created_at', { ascending: false })
     .limit(10);
 
@@ -148,6 +150,7 @@ async function fetchOrderWithItems(orderId, customerId) {
     .select('*, order_items(*, products(name, sku)), payments(status)')
     .eq('id', orderId)
     .eq('customer_id', customerId)
+    .is('deleted_at', null)
     .single();
 
   if (error || !data) return null;

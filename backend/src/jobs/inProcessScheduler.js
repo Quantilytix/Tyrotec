@@ -14,6 +14,7 @@ const warnExpiringReservations = require('./warnExpiringReservations');
 const releaseExpiredReservations = require('./releaseExpiredReservations');
 const waitingOrders = require('./waitingOrders');
 const clearExpiredDiscounts = require('./clearExpiredDiscounts');
+const purgeRecentlyDeleted = require('./purgeRecentlyDeleted');
 const syncToQx = require('./syncToQx');
 
 const INTERVAL_MS = 5 * 60 * 1000;
@@ -47,6 +48,11 @@ function startInProcessJobs({ intervalMs = INTERVAL_MS, firstRunDelayMs = FIRST_
       await clearExpiredDiscounts.run();
     } catch (err) {
       console.error('In-process discount clean-up failed:', err);
+    }
+    try {
+      await purgeRecentlyDeleted.run();
+    } catch (err) {
+      console.error('In-process Recently deleted clean-up failed:', err);
     }
     // After the reservation jobs, so orders they cancel go out in the same run.
     // Separate try: a QX outage must not affect the reservation jobs, or the

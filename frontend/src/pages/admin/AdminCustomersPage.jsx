@@ -11,6 +11,9 @@ import Modal from '../../components/ui/Modal';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import ActionMenu from '../../components/ui/ActionMenu';
 import NewCustomerForm from '../../components/admin/NewCustomerForm';
+import DeleteToBinDialog from '../../components/admin/DeleteToBinDialog';
+import { useAuth } from '../../context/AuthContext';
+import { isAdmin } from '../../utils/roles';
 
 export default function AdminCustomersPage() {
   const [customers, setCustomers] = useState([]);
@@ -22,8 +25,11 @@ export default function AdminCustomersPage() {
   const [notice, setNotice] = useState(null); // { ok, text } | null
   const [changingTerms, setChangingTerms] = useState(null); // customer | null
   const [savingTerms, setSavingTerms] = useState(false);
+  const [deleting, setDeleting] = useState(null); // customer | null
   const limit = 20;
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const canDelete = isAdmin(user?.role);
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -71,6 +77,8 @@ export default function AdminCustomersPage() {
       danger: customer.can_order_on_account,
       onClick: () => setChangingTerms(customer),
     },
+    // Admins. Refused while they still have orders or invoices.
+    { label: 'Delete', danger: true, hidden: !canDelete, onClick: () => setDeleting(customer) },
   ];
 
   return (
@@ -122,6 +130,22 @@ export default function AdminCustomersPage() {
           onConfirm={applyAccountTerms}
           onCancel={() => setChangingTerms(null)}
           loading={savingTerms}
+        />
+      )}
+
+      {deleting && (
+        <DeleteToBinDialog
+          type="customer"
+          id={deleting.id}
+          name={nameOf(deleting)}
+          what="They can no longer sign in to the portal or use WhatsApp, and their quotes go with them. A customer who still has orders or invoices can't be deleted until those are."
+          onDeleted={() => {
+            setCustomers((prev) => prev.filter((c) => c.id !== deleting.id));
+            setTotal((t) => Math.max(t - 1, 0));
+            setNotice({ ok: true, text: `${nameOf(deleting)} moved to Recently deleted.` });
+            setDeleting(null);
+          }}
+          onCancel={() => setDeleting(null)}
         />
       )}
 

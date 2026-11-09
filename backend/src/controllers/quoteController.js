@@ -51,6 +51,8 @@ const createQuoteForCustomerAdmin = asyncHandler(async (req, res) => {
     .select('email, company_name')
     .eq('id', customer_id)
     .eq('role', 'customer')
+    // Not one in Recently deleted (046).
+    .is('deleted_at', null)
     .single();
   if (custErr || !customer) return res.status(404).json({ error: 'Customer not found' });
 
@@ -76,6 +78,7 @@ const getCustomerQuotes = asyncHandler(async (req, res) => {
     .from('quotes')
     .select('*, quote_items(*, products(name, sku))')
     .eq('customer_id', req.user.id)
+    .is('deleted_at', null)
     .order('created_at', { ascending: false });
 
   if (error) throw error;
@@ -93,6 +96,7 @@ const exportQuotesAdmin = asyncHandler(async (req, res) => {
     let query = supabase
       .from('quotes')
       .select('*, users(email, company_name), quote_items(*, products(name, sku))')
+      .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
     if (source && source !== 'all') query = query.eq('source', source);
@@ -117,6 +121,7 @@ const getAllQuotesAdmin = asyncHandler(async (req, res) => {
   const { data, error } = await supabase
     .from('quotes')
     .select('*, users(email, company_name), quote_items(*, products(name, sku))')
+    .is('deleted_at', null)
     .order('created_at', { ascending: false });
 
   if (error) throw error;
@@ -138,6 +143,7 @@ const updateQuoteStatus = asyncHandler(async (req, res) => {
     .from('quotes')
     .select('id, status')
     .eq('id', id)
+    .is('deleted_at', null)
     .single();
 
   if (findErr || !quote) return res.status(404).json({ error: 'Quote not found' });
@@ -229,6 +235,8 @@ const getQuoteById = asyncHandler(async (req, res) => {
 
   if (!isStaff(req.user.role)) {
     query = query.eq('customer_id', req.user.id);
+    // Staff can still open one in Recently deleted (046); its customer can't.
+    query = query.is('deleted_at', null);
   }
 
   const { data, error } = await query.single();
@@ -307,7 +315,8 @@ const refreshQuote = asyncHandler(async (req, res) => {
   let query = supabase
     .from('quotes')
     .select('id, quote_number, status, customer_id, source, users(email, company_name), quote_items(product_id, quantity, vat_rate)')
-    .eq('id', req.params.quoteId);
+    .eq('id', req.params.quoteId)
+    .is('deleted_at', null);
   if (!isStaff(req.user.role)) query = query.eq('customer_id', req.user.id);
 
   const { data: quote, error } = await query.single();
@@ -380,6 +389,10 @@ const convertQuoteToOrder = asyncHandler(async (req, res) => {
 // customer does that as a separate step from the order page.
 const checkoutQuoteFast = asyncHandler(async (req, res) => {
   const { quoteId } = req.params;
+
+  // Not one staff deleted (046).
+  const { data: live } = await supabase.from('quotes').select('id').eq('id', quoteId).is('deleted_at', null).maybeSingle();
+  if (!live) return res.status(404).json({ error: 'Quote not found' });
 
   const discountProblem = await checkQuoteDiscounts(quoteId);
   if (discountProblem) {
@@ -488,6 +501,7 @@ const convertQuoteToOrderAdmin = asyncHandler(async (req, res) => {
     .from('quotes')
     .select('id, quote_number, customer_id, total_amount, users(email, company_name)')
     .eq('id', quoteId)
+    .is('deleted_at', null)
     .single();
   if (quoteErr || !quote) return res.status(404).json({ error: 'Quote not found.' });
 

@@ -10,6 +10,9 @@ const HAS_ACCOUNT_BUTTONS = [
 
 const MAX_EMAIL_ATTEMPTS = 5;
 
+// For an account that's deleted (046) or suspended.
+const INACTIVE_ACCOUNT_TEXT = "This Tyrotec account isn't active any more. Please contact Tyrotec if you'd like to order.";
+
 async function greetAndShowMenu(phone, user) {
   const { sendMenu } = require('./mainMenu');
   await sendMenu(phone, `👋 Welcome back${user.full_name ? `, ${user.full_name}` : ''}!`);
@@ -116,6 +119,11 @@ async function handle(conversation, message) {
   // No prior state -- first-ever message from this (still unlinked) number.
   const existingUser = await findUserByPhone(phone);
   if (existingUser) {
+    // A deleted (046) or suspended account isn't greeted into the menu.
+    if (existingUser.status !== 'approved') {
+      await sendText(phone, INACTIVE_ACCOUNT_TEXT);
+      return { newState: 'awaiting_has_account', newContext: {} };
+    }
     return greetAndShowMenu(phone, existingUser);
   }
 
@@ -126,4 +134,4 @@ async function handle(conversation, message) {
   return { newState: 'awaiting_has_account', newContext: {} };
 }
 
-module.exports = { handle };
+module.exports = { handle, INACTIVE_ACCOUNT_TEXT };

@@ -32,6 +32,7 @@ import AdminCustomerDetailPage from './pages/admin/AdminCustomerDetailPage';
 import AdminAnalyticsPage from './pages/admin/AdminAnalyticsPage';
 import AdminStaffPage from './pages/admin/AdminStaffPage';
 import AdminActivityLogPage from './pages/admin/AdminActivityLogPage';
+import AdminRecentlyDeletedPage from './pages/admin/AdminRecentlyDeletedPage';
 import AdminReviewsPage from './pages/admin/AdminReviewsPage';
 import AdminSuppliersPage from './pages/admin/AdminSuppliersPage';
 import AdminDiscountsPage from './pages/admin/AdminDiscountsPage';
@@ -134,6 +135,7 @@ export default function App() {
               <Route path="/admin/discounts" element={<AdminDiscountsPage />} />
               <Route path="/admin/staff" element={<AdminStaffPage />} />
               <Route path="/admin/activity-log" element={<AdminActivityLogPage />} />
+              <Route path="/admin/recently-deleted" element={<AdminRecentlyDeletedPage />} />
             </Route>
 
             <Route

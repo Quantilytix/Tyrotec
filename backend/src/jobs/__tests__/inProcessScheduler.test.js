@@ -2,6 +2,7 @@ jest.mock('../warnExpiringReservations', () => ({ run: jest.fn() }));
 jest.mock('../releaseExpiredReservations', () => ({ run: jest.fn() }));
 jest.mock('../waitingOrders', () => ({ run: jest.fn() }));
 jest.mock('../clearExpiredDiscounts', () => ({ run: jest.fn() }));
+jest.mock('../purgeRecentlyDeleted', () => ({ run: jest.fn().mockResolvedValue() }));
 jest.mock('../syncToQx', () => ({ run: jest.fn() }));
 
 const warnExpiringReservations = require('../warnExpiringReservations');

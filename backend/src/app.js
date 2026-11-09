@@ -21,6 +21,7 @@ const discountRoutes = require('./routes/discountRoutes');
 const helpRoutes = require('./routes/helpRoutes');
 const purchaseRoutes = require('./routes/purchaseRoutes');
 const stockRoutes = require('./routes/stockRoutes');
+const recentlyDeletedRoutes = require('./routes/recentlyDeletedRoutes');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 const { startInProcessJobs } = require('./jobs/inProcessScheduler');
 const { syncSoonAfterChanges } = require('./services/qxSyncService');
@@ -94,6 +95,7 @@ app.use('/api/discounts', discountRoutes);
 app.use('/api/help', helpRoutes);
 app.use('/api/purchases', purchaseRoutes);
 app.use('/api/stock', stockRoutes);
+app.use('/api/recently-deleted', recentlyDeletedRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {

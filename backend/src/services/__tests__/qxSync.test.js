@@ -197,6 +197,21 @@ describe('runQxSync', () => {
     const built = await buildRecords([{ id: 9, entity_type: 'customer', entity_id: 'u1', enqueued_at: 'x' }]);
     expect(built[0].record).toMatchObject({ type: 'customer', id: 'u1', deleted: true });
   });
+
+  // Recently deleted (046): a purchase's stock was taken back off, so it
+  // leaves the books; a deleted order stays in QX as the cancelled invoice it is.
+  it('a purchase in Recently deleted is sent as deleted; a deleted order is not', async () => {
+    supabase.from.mockImplementation((table) => {
+      if (table === 'purchases') return query({ data: [{ id: 'p1', deleted_at: '2026-11-09T08:00:00Z', purchase_items: [] }], error: null });
+      return query({ data: [{ id: 'o1', order_number: 7, created_at: '2026-10-02T08:00:00Z', status: 'cancelled', deleted_at: '2026-11-09T08:00:00Z', subtotal_amount: 10, total_amount: 11.5, order_items: [] }], error: null });
+    });
+    const built = await buildRecords([
+      { id: 10, entity_type: 'purchase', entity_id: 'p1', enqueued_at: 'x' },
+      { id: 11, entity_type: 'order', entity_id: 'o1', enqueued_at: 'x' },
+    ]);
+    expect(built.find((b) => b.record.id === 'p1').record).toMatchObject({ deleted: true });
+    expect(built.find((b) => b.record.id === 'o1').record.deleted).toBeUndefined();
+  });
 });
 
 describe('sync soon after a change', () => {

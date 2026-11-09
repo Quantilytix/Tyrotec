@@ -34,6 +34,10 @@ const getAllCustomersAdmin = asyncHandler(async (req, res) => {
       count: 'exact',
     })
     .eq('role', 'customer')
+    // Not customers, or their orders and quotes, in Recently deleted (046).
+    .is('deleted_at', null)
+    .is('orders.deleted_at', null)
+    .is('quotes.deleted_at', null)
     .order('created_at', { ascending: false })
     .range(from, to);
 
@@ -61,6 +65,7 @@ const getCustomerDetailAdmin = asyncHandler(async (req, res) => {
     .select('id, email, company_name, phone, created_at, can_order_on_account')
     .eq('id', req.params.id)
     .eq('role', 'customer')
+    .is('deleted_at', null)
     .single();
 
   if (customerErr || !customer) return res.status(404).json({ error: 'Customer not found' });
@@ -69,6 +74,7 @@ const getCustomerDetailAdmin = asyncHandler(async (req, res) => {
     .from('orders')
     .select('*, order_items(*, products(name, sku)), payments(status)')
     .eq('customer_id', req.params.id)
+    .is('deleted_at', null)
     .order('created_at', { ascending: false });
   if (ordersErr) throw ordersErr;
 
@@ -76,6 +82,7 @@ const getCustomerDetailAdmin = asyncHandler(async (req, res) => {
     .from('quotes')
     .select('*, quote_items(*, products(name, sku))')
     .eq('customer_id', req.params.id)
+    .is('deleted_at', null)
     .order('created_at', { ascending: false });
   if (quotesErr) throw quotesErr;
 
@@ -102,9 +109,13 @@ const createCustomerAdmin = asyncHandler(async (req, res) => {
   if (vatNumber && vatNumber.length > 30) return res.status(400).json({ error: 'The VAT number is too long.' });
   if (address && address.length > 500) return res.status(400).json({ error: 'Keep the address under 500 characters.' });
 
-  const { data: existingByEmail } = await supabase.from('users').select('id').eq('email', email).maybeSingle();
+  const { data: existingByEmail } = await supabase.from('users').select('id, deleted_at').eq('email', email).maybeSingle();
   if (existingByEmail) {
-    return res.status(400).json({ error: 'A customer with that email already exists.' });
+    return res.status(400).json({
+      error: existingByEmail.deleted_at
+        ? 'A customer with that email is in Recently deleted. Restore them there instead.'
+        : 'A customer with that email already exists.',
+    });
   }
 
   const normalizedPhone = phone ? normalizePhone(phone) : null;

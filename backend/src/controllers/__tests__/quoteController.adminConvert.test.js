@@ -38,6 +38,7 @@ function quoteLookup(quote, error = null) {
   const q = {};
   q.select = jest.fn(() => q);
   q.eq = jest.fn(() => q);
+  q.is = jest.fn(() => q); // .is('deleted_at', null): not in Recently deleted
   q.single = jest.fn(() => Promise.resolve({ data: quote, error }));
   return q;
 }

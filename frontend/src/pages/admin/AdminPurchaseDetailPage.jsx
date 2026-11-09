@@ -29,6 +29,15 @@ export default function AdminPurchaseDetailPage() {
         ← Purchases
       </Link>
       <h1 className="mt-1 font-display text-xl font-semibold text-ink">Purchase #{purchase.purchase_number}</h1>
+      {purchase.deleted_at && (
+        <p className="mt-3 rounded-lg bg-bad-50 px-3 py-2 text-sm text-bad-500">
+          This purchase is in{' '}
+          <Link to="/admin/recently-deleted" className="font-medium underline">
+            Recently deleted
+          </Link>
+          : its stock was taken back off. Restore it there to put it back.
+        </p>
+      )}
       <p className="mt-1 text-sm text-slate-500">
         Received {formatDay(purchase.purchase_date)} from {purchase.supplier?.name}
         {capturedBy ? ` · captured by ${capturedBy}` : ''} on {formatDate(purchase.created_at)}

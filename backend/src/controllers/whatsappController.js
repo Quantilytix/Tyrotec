@@ -7,6 +7,8 @@ const productBrowsing = require('../services/whatsappFlows/productBrowsing');
 const quoteBuilding = require('../services/whatsappFlows/quoteBuilding');
 const orderConversion = require('../services/whatsappFlows/orderConversion');
 const history = require('../services/whatsappFlows/history');
+const { sendText } = require('../config/whatsapp');
+const { INACTIVE_ACCOUNT_TEXT } = accountResolution;
 
 // Meta's one-time handshake when the webhook URL is registered in the Meta
 // dashboard: echo hub.challenge back as plain text if the verify token
@@ -81,6 +83,13 @@ async function isDuplicateMessage(wamid) {
 async function routeMessage(conversation, message) {
   if (!conversation.user_id) {
     return accountResolution.handle(conversation, message);
+  }
+
+  // A deleted (046) or suspended account can't carry on here either.
+  const { data: account } = await supabase.from('users').select('status').eq('id', conversation.user_id).maybeSingle();
+  if (account?.status !== 'approved') {
+    await sendText(conversation.phone, INACTIVE_ACCOUNT_TEXT);
+    return { newState: 'main_menu', newContext: {} };
   }
 
   const said = (message.text || '').trim().toLowerCase();

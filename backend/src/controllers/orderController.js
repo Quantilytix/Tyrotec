@@ -91,6 +91,8 @@ const getCustomerOrders = asyncHandler(async (req, res) => {
     .from('orders')
     .select('*, order_items(*, products(name, sku)), payments(*)')
     .eq('customer_id', req.user.id)
+    // Not ones staff deleted (046).
+    .is('deleted_at', null)
     .order('created_at', { ascending: false });
 
   if (error) throw error;
@@ -109,6 +111,7 @@ const getAllOrdersAdmin = asyncHandler(async (req, res) => {
   const query = supabase
     .from('orders')
     .select('*, users(email, company_name), order_items(*, products(stock_quantity)), payments(amount, status)')
+    .is('deleted_at', null)
     .order('created_at', { ascending: false });
 
   const { data, error } = await filterByKind(query, req.query.kind);
@@ -127,6 +130,7 @@ const exportOrdersAdmin = asyncHandler(async (req, res) => {
       supabase
         .from('orders')
         .select('*, users(email, company_name), order_items(*, products(name, sku)), payments(*)')
+        .is('deleted_at', null)
         .order('created_at', { ascending: false }),
       kind
     );
@@ -162,6 +166,8 @@ const getOrderById = asyncHandler(async (req, res) => {
 
   if (!isStaff(req.user.role)) {
     query = query.eq('customer_id', req.user.id);
+    // Staff can still open one in Recently deleted (046); its customer can't.
+    query = query.is('deleted_at', null);
   }
 
   const { data, error } = await query.single();
@@ -181,11 +187,14 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
 
   const { data: order, error: findErr } = await supabase
     .from('orders')
-    .select('id, order_number, invoice_number, status, customer_id, users(email, company_name, phone)')
+    .select('id, order_number, invoice_number, status, customer_id, deleted_at, users(email, company_name, phone)')
     .eq('id', id)
     .single();
 
   if (findErr || !order) return res.status(404).json({ error: 'Order not found' });
+  if (order.deleted_at) {
+    return res.status(400).json({ error: "It's in Recently deleted. Restore it first." });
+  }
 
   if (!ORDER_TRANSITIONS[order.status]?.includes(status)) {
     return res.status(400).json({
@@ -405,7 +414,7 @@ async function loadInvoice(id, user) {
     .from('orders')
     .select('*, order_items(*, products(name, sku)), users(email, company_name, full_name, phone, vat_number, address), payments(amount, status)')
     .eq('id', id);
-  if (!isStaff(user.role)) query = query.eq('customer_id', user.id);
+  if (!isStaff(user.role)) query = query.eq('customer_id', user.id).is('deleted_at', null);
   const { data } = await query.maybeSingle();
   return data?.invoice_number ? data : null;
 }

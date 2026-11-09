@@ -4,6 +4,9 @@ import { getAllQuotesAdmin, exportQuotesAdmin, getQuoteById, sendQuoteEmailAdmin
 import { downloadSavedQuotePdf } from '../../utils/generateQuotePdf';
 import ActionMenu from '../../components/ui/ActionMenu';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
+import DeleteToBinDialog from '../../components/admin/DeleteToBinDialog';
+import { useAuth } from '../../context/AuthContext';
+import { isAdmin } from '../../utils/roles';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { saveBlobResponse, blobErrorMessage } from '../../utils/downloadFile';
 import { isWithinDateRange } from '../../utils/dateRange';
@@ -29,7 +32,10 @@ export default function AdminQuotesPage() {
   const [notice, setNotice] = useState(null); // { ok, text } | null
   const [converting, setConverting] = useState(null); // quote | null
   const [convertBusy, setConvertBusy] = useState(false);
+  const [deleting, setDeleting] = useState(null); // quote | null
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const canDelete = isAdmin(user?.role);
 
   useEffect(() => {
     getAllQuotesAdmin()
@@ -68,6 +74,8 @@ export default function AdminQuotesPage() {
       },
       { divider: true },
       { label: 'Convert to invoice', hidden: !open, onClick: () => setConverting(quote) },
+      // Admins. One that became an order or invoice goes with it instead.
+      { label: 'Delete', danger: true, hidden: !canDelete || quote.status === 'converted', onClick: () => setDeleting(quote) },
     ];
   };
 
@@ -183,6 +191,20 @@ export default function AdminQuotesPage() {
             }
           }}
           onCancel={() => setConverting(null)}
+        />
+      )}
+
+      {deleting && (
+        <DeleteToBinDialog
+          type="quote"
+          id={deleting.id}
+          name={`quote #${deleting.quote_number}`}
+          onDeleted={() => {
+            setQuotes((prev) => prev.filter((q) => q.id !== deleting.id));
+            setNotice({ ok: true, text: `Quote #${deleting.quote_number} moved to Recently deleted.` });
+            setDeleting(null);
+          }}
+          onCancel={() => setDeleting(null)}
         />
       )}
 

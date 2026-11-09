@@ -54,6 +54,8 @@ const getAnalyticsSummary = asyncHandler(async (req, res) => {
   const { data: quotes, error: quotesErr } = await supabase
     .from('quotes')
     .select('status, source, created_at')
+    // Leaving out anything in Recently deleted (046), here and below.
+    .is('deleted_at', null)
     .gte('created_at', fromISO)
     .lt('created_at', toExclusiveISO);
   if (quotesErr) throw quotesErr;
@@ -70,6 +72,7 @@ const getAnalyticsSummary = asyncHandler(async (req, res) => {
   const { data: orderItems, error: itemsErr } = await supabase
     .from('order_items')
     .select('quantity, unit_price, product_id, products(name, sku, category), orders!inner(created_at)')
+    .is('orders.deleted_at', null)
     .gte('orders.created_at', fromISO)
     .lt('orders.created_at', toExclusiveISO);
   if (itemsErr) throw itemsErr;
@@ -103,6 +106,7 @@ const getAnalyticsSummary = asyncHandler(async (req, res) => {
   const { data: orders, error: ordersErr } = await supabase
     .from('orders')
     .select('status, total_amount, subtotal_amount, vat_amount, created_at, source')
+    .is('deleted_at', null)
     .gte('created_at', fromISO)
     .lt('created_at', toExclusiveISO);
   if (ordersErr) throw ordersErr;
@@ -154,7 +158,9 @@ const getAnalyticsSummary = asyncHandler(async (req, res) => {
   const { data: customers, error: custErr } = await supabase
     .from('users')
     .select('id, email, company_name, created_at, orders(status, total_amount, subtotal_amount, vat_amount, created_at)')
-    .eq('role', 'customer');
+    .eq('role', 'customer')
+    .is('deleted_at', null)
+    .is('orders.deleted_at', null);
   if (custErr) throw custErr;
 
   const customerStats = customers.map((c) => {

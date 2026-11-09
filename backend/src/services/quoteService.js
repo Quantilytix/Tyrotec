@@ -151,6 +151,8 @@ async function convertQuoteForCustomer(customerId, customerLabel, quoteId, sourc
     .select('*, quote_items(*)')
     .eq('id', quoteId)
     .eq('customer_id', customerId)
+    // Not one in Recently deleted (046).
+    .is('deleted_at', null)
     .single();
 
   if (qErr || !quote) return { error: 'Quote not found.', status: 404 };
@@ -213,6 +215,7 @@ async function updateQuoteItems(quoteId, items, { staff = false } = {}) {
     .from('quotes')
     .select('id, quote_number, status, customer_id, total_amount')
     .eq('id', quoteId)
+    .is('deleted_at', null)
     .single();
   if (qErr || !quote) return { error: 'Quote not found.', status: 404 };
   if (!['draft', 'submitted'].includes(quote.status)) {

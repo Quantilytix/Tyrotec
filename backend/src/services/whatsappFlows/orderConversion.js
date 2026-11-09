@@ -25,6 +25,7 @@ async function start(conversation) {
     .select('id, quote_number, total_amount, created_at')
     .eq('customer_id', user_id)
     .eq('status', 'submitted')
+    .is('deleted_at', null) // not in Recently deleted (046)
     .order('created_at', { ascending: false })
     .limit(10); // list cap -- most recent 10, same simplification as category browsing
 
@@ -66,6 +67,7 @@ async function fetchQuoteWithItems(quoteId, customerId) {
     .select('*, quote_items(*, products(name, sku)), users(company_name, full_name, email, phone, vat_number, address)')
     .eq('id', quoteId)
     .eq('customer_id', customerId)
+    .is('deleted_at', null)
     .single();
 
   if (error || !data) return null;

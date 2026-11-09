@@ -65,6 +65,8 @@ const LOADERS = {
   opening_stock: { table: 'opening_stock', select: '*', build: (row) => records.openingStockRecord(row) },
 };
 
+const SENT_DELETED_WHEN_IN_BIN = new Set(['purchase']);
+
 // Queue entries -> QX records, read now. A record that no longer exists is
 // sent as deleted. updated_at is the read time: later reads of the same
 // record always carry a later time, so QX never applies an older version.
@@ -91,7 +93,12 @@ async function buildRecords(entries) {
 
     for (const entry of group) {
       const row = rowsById.get(entry.entity_id);
-      const data = row ? loader.build(row) : null;
+      // In Recently deleted (046): a purchase leaves the books too -- its
+      // stock was taken back off. A deleted order stays in QX as the
+      // cancelled invoice it is; quotes and customers stay until removed for
+      // good after 30 days, which deletes them in QX the usual way.
+      const gone = !row || (SENT_DELETED_WHEN_IN_BIN.has(type) && row.deleted_at);
+      const data = gone ? null : loader.build(row);
       built.push({
         entry,
         record: data
