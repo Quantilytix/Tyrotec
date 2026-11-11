@@ -11,7 +11,7 @@ const LIMIT = 50;
 
 // Two views of the same trail, because they answer different questions:
 // "what has my team been doing" and "what has this customer been doing".
-// Automated actors (the PayFast webhook, the reservation jobs) sit with staff
+// Automated actors (the Paystack webhook, the reservation jobs) sit with staff
 // activity -- they're the business's own side, not something a customer did.
 const TABS = [
   { key: 'staff', label: 'Staff activity', blurb: 'What staff and automated processes did.' },

@@ -4,7 +4,7 @@ import { getReceiptPayment, receiptTotals, receiptNumber, buildReceiptDoc } from
 const payment = (overrides) => ({
   id: 'p1',
   status: 'approved',
-  method: 'payfast',
+  method: 'paystack',
   amount: 340,
   created_at: '2026-09-02T21:02:00Z',
   ...overrides,

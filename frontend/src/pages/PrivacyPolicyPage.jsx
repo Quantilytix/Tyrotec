@@ -9,7 +9,7 @@ const UL = 'mt-3 list-disc space-y-2 pl-5 text-sm leading-relaxed text-slate-600
 //
 // LAST_UPDATED is a fixed date on purpose: change it whenever the wording
 // changes, so customers can tell when the policy last moved.
-const LAST_UPDATED = '27 October 2026';
+const LAST_UPDATED = '10 November 2026';
 // [CONTACT EMAIL] is a placeholder: confirm the real public support/privacy
 // contact address before this goes live -- see the note left for the user
 // in chat.
@@ -57,9 +57,10 @@ export default function PrivacyPolicyPage() {
             status).
           </li>
           <li>
-            <strong>Payments:</strong> online payments are made on PayFast&apos;s secure payment page, by card or
-            Instant EFT. Your card or bank login details are entered with PayFast, not with us, and we never see or
-            store them. PayFast tells us whether the payment succeeded, with its reference and the amount. If you pay
+            <strong>Payments:</strong> online payments are made on Paystack&apos;s secure payment page, by card or the
+            other payment options it shows. Your card or bank login details are entered with Paystack, not with us, and
+            we never see or store them. Paystack tells us whether the payment succeeded, with its reference and the
+            amount. If you pay
             us another way (for example a bank transfer or cash we have agreed with you), our staff record that
             payment against your order once they have confirmed it.
           </li>
@@ -94,7 +95,7 @@ export default function PrivacyPolicyPage() {
           <li>Create and manage your account, and verify who you are when you sign in;</li>
           <li>Let you browse our catalog and build, submit, and track quotes and orders;</li>
           <li>Let you order via WhatsApp and recognize you across both channels;</li>
-          <li>Take payment for your orders through PayFast and confirm when it has been received;</li>
+          <li>Take payment for your orders through Paystack and confirm when it has been received;</li>
           <li>Keep our accounting and tax records, including invoices and receipts for your orders;</li>
           <li>Send you notifications about your quotes, orders, and payments (in-app and by email);</li>
           <li>Answer the questions you ask on the Help page;</li>
@@ -120,8 +121,8 @@ export default function PrivacyPolicyPage() {
             <strong>Render</strong>: hosts our backend server.
           </li>
           <li>
-            <strong>PayFast</strong>: processes online payments. When you choose to pay, PayFast receives your name,
-            email address, order number, the items and the amount, so it can take the payment and send you its own
+            <strong>Paystack</strong>: processes online payments. When you choose to pay, Paystack receives your email
+            address, your order or invoice number and the amount, so it can take the payment and send you its own
             confirmation.
           </li>
           <li>

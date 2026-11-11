@@ -1,8 +1,8 @@
 const supabase = require('../config/supabase');
 
-// Single source of truth for orders.status, per the additive PayFast/review-
+// Single source of truth for orders.status, per the additive Paystack/review-
 // queue design: every write to this column -- the existing admin manual
-// update, the new PayFast webhook, the reservation-expiry job, and the
+// update, the new Paystack webhook, the reservation-expiry job, and the
 // admin-review resolve endpoint -- goes through transitionOrderStatus()
 // instead of each doing its own supabase.from('orders').update({status}).
 //
@@ -16,7 +16,7 @@ const supabase = require('../config/supabase');
 // 'approved' -> 'confirmed' is how an offline payment lands: staff record
 // money received against an approved order (paymentService.js's
 // recordStaffPayment) and it joins the same confirmed -> ready_for_collection
-// path a PayFast payment takes, so both kinds of paid order end up in one
+// path a Paystack payment takes, so both kinds of paid order end up in one
 // place and both can produce a receipt.
 const ORDER_TRANSITIONS = {
   pending_approval: ['approved', 'cancelled'],
@@ -64,7 +64,7 @@ async function transitionOrderStatus(orderId, newStatus) {
   }
 
   // Only if the status is still the one checked above. Without this, a
-  // PayFast confirmation racing the reservation-expiry job could mark an
+  // Paystack confirmation racing the reservation-expiry job could mark an
   // order paid just after the job cancelled it and released its stock.
   const { data: updated, error } = await supabase
     .from('orders')

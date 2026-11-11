@@ -107,7 +107,7 @@ async function notifyStockArrivals() {
         title: 'Your stock has arrived',
         message: paid
           ? `Good news: the items on your ${saleLabel(order)} have arrived. It's already paid, so we're getting it ready for you.`
-          : `Good news: the items on your ${saleLabel(order)} have arrived and are set aside for you. Pay now on the Customer Portal with PayFast (card or Instant EFT).${due}`,
+          : `Good news: the items on your ${saleLabel(order)} have arrived and are set aside for you. Pay now on the Customer Portal with Paystack, or by EFT.${due}`,
         relatedType: 'order',
         relatedId: order.id,
         email: customer?.email,

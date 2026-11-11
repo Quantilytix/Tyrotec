@@ -18,10 +18,16 @@ export const emailInvoice = (orderId) => apiClient.post(`/orders/${orderId}/emai
 export const updateOrderStatus = (id, status) =>
   apiClient.patch(`/orders/${id}/status`, { status });
 
-// order must be 'stock_reserved' or 'approved'. Returns { action, fields } -- the
-// PayFast checkout URL and the signed form fields to auto-post the browser
-// to (see PayfastRedirectForm.jsx).
-export const initiatePayfastPayment = (orderId) => apiClient.post(`/orders/${orderId}/pay`);
+// Customer: pay online with Paystack. Returns { url } -- Paystack's payment
+// page to send the browser to. No Paystack key is ever in the portal; the API
+// holds it.
+export const startOnlinePayment = (orderId) => apiClient.post(`/orders/${orderId}/pay`);
+
+// Customer, back from Paystack (?reference=... on the order page): the API
+// asks Paystack what happened. Returns { outcome }: 'paid', 'needs_review',
+// 'not_paid' or 'unknown'.
+export const confirmOnlinePayment = (orderId, reference) =>
+  apiClient.post(`/orders/${orderId}/pay/confirm`, { reference });
 
 // Staff: tell the customer of an order waiting for stock when it should
 // arrive, as a number of days from today.

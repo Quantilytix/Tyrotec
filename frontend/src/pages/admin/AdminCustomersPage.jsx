@@ -123,7 +123,7 @@ export default function AdminCustomersPage() {
           title={changingTerms.can_order_on_account ? 'Stop account ordering?' : 'Allow ordering on account?'}
           message={
             changingTerms.can_order_on_account
-              ? `${nameOf(changingTerms)} will have to pay through PayFast again. Orders already placed on account are unaffected.`
+              ? `${nameOf(changingTerms)} will have to pay up front again. Orders already placed on account are unaffected.`
               : `${nameOf(changingTerms)} will be able to place orders without paying first. Stock is committed immediately and you collect payment on invoice.`
           }
           confirmLabel={changingTerms.can_order_on_account ? 'Disable' : 'Enable'}

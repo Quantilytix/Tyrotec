@@ -56,7 +56,7 @@ const ORDER = {
   payments: [
     {
       status: 'approved',
-      method: 'payfast',
+      method: 'paystack',
       gateway_reference: '3365147',
       verified_at: '2026-08-15T10:00:00Z',
       created_at: '2026-08-15T09:59:00Z',
@@ -180,7 +180,7 @@ describe('buildOrdersWorkbook', () => {
     const values = rowValues(sheet, 2);
 
     expect(values[5]).toBe('Ready for collection');
-    expect(values).toEqual(expect.arrayContaining(['Payfast', 'Paid', '3365147']));
+    expect(values).toEqual(expect.arrayContaining(['Paystack', 'Paid', '3365147']));
   });
 
   // Paid while it waits for stock (043): the screen says so, and so does the file.

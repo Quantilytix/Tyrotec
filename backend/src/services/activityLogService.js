@@ -51,7 +51,7 @@ function logForUser(user, entry) {
 
 // Admin only (enforced at the route) -- paginated, newest first.
 // `audience` picks the view: 'staff' (everything staff and automated actors
-// did) or 'customer'. Automated entries (the PayFast webhook, the reservation
+// did) or 'customer'. Automated entries (the Paystack webhook, the reservation
 // jobs) belong with staff activity: they're the business's own side of the
 // conversation, not something a customer did.
 async function listActivity({ page = 1, limit = 50, audience, action, search, from, to } = {}) {

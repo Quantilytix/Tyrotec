@@ -385,7 +385,7 @@ const convertQuoteToOrder = asyncHandler(async (req, res) => {
 // state instead -- it falls back into the same manual admin queue that
 // already handles that state today, just with an admin_reviews row
 // (reason='stock_short') explaining why it's there. This endpoint only
-// creates the order -- it never initiates a PayFast payment itself; the
+// creates the order -- it never initiates a Paystack payment itself; the
 // customer does that as a separate step from the order page.
 const checkoutQuoteFast = asyncHandler(async (req, res) => {
   const { quoteId } = req.params;
@@ -431,7 +431,7 @@ const checkoutQuoteFast = asyncHandler(async (req, res) => {
       notifyInternalTeam({
         type: 'general',
         title: 'Fast checkout: stock reserved',
-        message: `${customerLabel} reserved stock for order #${order.order_number} (${formatCurrency(order.total_amount)}) and can now pay via PayFast.`,
+        message: `${customerLabel} reserved stock for order #${order.order_number} (${formatCurrency(order.total_amount)}) and can now pay online with Paystack.`,
         relatedType: 'order',
         relatedId: result.order_id,
       }),
@@ -442,7 +442,7 @@ const checkoutQuoteFast = asyncHandler(async (req, res) => {
         action: 'quote.converted',
         entityType: 'order',
         entityId: result.order_id,
-        description: `${customerLabel} used fast checkout to create order #${order.order_number} (${formatCurrency(order.total_amount)}); stock reserved, awaiting PayFast payment.`,
+        description: `${customerLabel} used fast checkout to create order #${order.order_number} (${formatCurrency(order.total_amount)}); stock reserved, awaiting online payment.`,
       }),
     ]);
   } else {

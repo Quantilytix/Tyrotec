@@ -16,7 +16,7 @@ async function insertReview(orderId, reason) {
 
 // Called right after checkout, regardless of whether stock was available --
 // these two reasons flag an order for staff attention without blocking the
-// automated path (stock reservation/PayFast payment proceed normally either
+// automated path (stock reservation/Paystack payment proceed normally either
 // way, per "never block other customers' orders").
 // `netAmount` is the order's value excluding VAT (see the caller): the
 // threshold is about the size of the deal, not the tax on top of it.

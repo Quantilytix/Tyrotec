@@ -23,7 +23,7 @@ Ordering
 - If something isn't in stock, the order waits for it (status "Awaiting approval"). The customer is told when it should arrive and is notified when it does. The stock is then set aside and the customer has 3 days to pay; after that it goes to the next customer.
 
 Paying
-- Customers pay with the "Pay now" button on the order, which opens PayFast. On PayFast's page they can pay by card or Instant EFT.
+- Customers pay with the "Pay now" button on the order or invoice, which opens Paystack's secure payment page (card, EFT and the other options Paystack shows). They can also pay by EFT into Tyrotec's bank account, using the invoice number as the reference; staff record those payments.
 - Some business accounts are set up to pay on invoice; they also see "Pay on invoice".
 - A receipt can be downloaded from a paid order.
 

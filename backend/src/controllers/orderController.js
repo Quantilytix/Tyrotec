@@ -7,7 +7,6 @@ const { invoiceLabel, saleLabel } = require('../utils/invoiceNumber');
 const { displayTotals } = require('../utils/vat');
 const { notifyIfLowStockCrossing } = require('./productController');
 const { transitionOrderStatus, ORDER_TRANSITIONS } = require('../services/orderStateService');
-const { buildCheckoutFields } = require('../services/payfastService');
 const { buildOrdersWorkbook, sendWorkbook } = require('../services/exportService');
 const { applyDateRange, fetchAllRows } = require('../utils/exportQuery');
 const { filterBySearch } = require('../utils/searchFilter');
@@ -47,21 +46,19 @@ async function withReservationSecondsRemaining(order) {
 
 // What a human can pick from the admin status dropdown. Deliberately
 // excludes 'stock_reserved' (only ever set by checkout_quote_with_reservation
-// at order creation) and 'confirmed' (only ever set by the verified PayFast
-// webhook in payfastWebhookController.js -- an admin clicking a dropdown is
+// at order creation) and 'confirmed' (only ever set by a recorded payment:
+// Paystack (onlinePaymentService.js) or staff recording one -- a dropdown is
 // exactly the kind of untrusted client-side trigger that state is supposed
 // to never come from). 'ready_for_collection' stays reachable here since
 // marking fulfillment ready is a legitimate manual staff action.
 const ORDER_STATUSES = ['pending_approval', 'approved', 'processing', 'completed', 'cancelled', 'ready_for_collection'];
 
-// Orders a customer can pay online: their stock is already set aside.
-const PAYFAST_PAYABLE_STATUSES = ['stock_reserved', 'approved'];
 
 // name: "order #57" or "invoice INV-0003" (saleLabel); kind: "Order"/"Invoice".
 const STATUS_NOTIFICATIONS = {
   approved: (name, kind) => ({
     title: `${kind} approved`,
-    message: `Good news, your ${name} has been approved. Pay now on the Customer Portal with PayFast (card or Instant EFT).`,
+    message: `Good news, your ${name} has been approved. Pay now on the Customer Portal with Paystack, or by EFT.`,
   }),
   // Approving an order that was paid before approval confirms it (043).
   confirmed: (name, kind) => ({
@@ -278,30 +275,6 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
   return res.json({ message: 'Order status updated', orderId: id, status: newStatus });
 });
 
-// Customer only. Order must be theirs and have its stock set aside: reserved
-// at checkout ('stock_reserved'), or approved by staff or when stock it was
-// waiting for arrived ('approved'). There's no PayFast payment possible for
-// an order still sitting in the pending_approval queue.
-const initiatePayfastPayment = asyncHandler(async (req, res) => {
-  const { id } = req.params;
-
-  const { data: order, error } = await supabase
-    .from('orders')
-    .select('id, order_number, invoice_number, status, total_amount, customer_id, users(email, company_name), order_items(quantity, products(name))')
-    .eq('id', id)
-    .eq('customer_id', req.user.id)
-    .single();
-
-  if (error || !order) return res.status(404).json({ error: 'Order not found' });
-  if (!PAYFAST_PAYABLE_STATUSES.includes(order.status)) {
-    return res.status(400).json({ error: 'This order is not awaiting PayFast payment.' });
-  }
-
-  const checkout = buildCheckoutFields(order, order.users || {});
-
-  return res.json(checkout);
-});
-
 // Lean, poll-friendly status lookup -- same ownership scoping as
 // getOrderById (staff see any order, customers only their own) but without
 // the full item/payment payload.
@@ -491,6 +464,5 @@ module.exports = {
   exportOrdersAdmin,
   getOrderById,
   updateOrderStatus,
-  initiatePayfastPayment,
   getOrderStatus,
 };

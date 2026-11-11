@@ -7,7 +7,7 @@ const FIELD_CLASS =
 const LABEL_CLASS = 'block text-xs font-medium text-slate-600';
 
 // Staff-only. There is no customer equivalent of this form: a customer pays
-// through PayFast, and money that arrives any other way is recorded by
+// through Paystack, and money that arrives any other way is recorded by
 // whoever can actually see it land in the bank. That's why there's no proof
 // upload here either -- the person filling this in is the verification.
 const METHODS = [

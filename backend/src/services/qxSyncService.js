@@ -224,7 +224,7 @@ function scheduleQxSyncSoon(delayMs = SOON_DELAY_MS) {
 
 // Express middleware: any request that changed something successfully
 // schedules a sync. Changes only happen through this API (the website,
-// PayFast's notifications, WhatsApp), so this covers all of them.
+// Paystack's webhook, WhatsApp), so this covers all of them.
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 function syncSoonAfterChanges(req, res, next) {
   if (MUTATING.has(req.method)) {

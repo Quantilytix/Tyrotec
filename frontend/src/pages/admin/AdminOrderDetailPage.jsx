@@ -90,7 +90,7 @@ function WaitingForStockCard({ order, shortLines, paid, onSaved }) {
 
 // Says what the order is waiting on when there's nothing to click.
 const WAITING_ON = {
-  stock_reserved: 'Waiting for the customer to pay online. Confirms itself once PayFast pays, or record the payment yourself.',
+  stock_reserved: 'Waiting for the customer to pay online. Confirms itself once Paystack confirms the payment, or record the payment yourself.',
   awaiting_payment: 'To be paid on invoice. Record the payment once it reflects in the bank.',
   approved: 'Waiting for payment. Record it once it reflects in the bank.',
   completed: 'This order is finished.',

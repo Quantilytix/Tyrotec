@@ -1,7 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { getOrderById, getOrderStatus, initiatePayfastPayment, payOrderOnInvoice, downloadInvoicePdf } from '../api/orders';
+import {
+  getOrderById,
+  getOrderStatus,
+  startOnlinePayment,
+  confirmOnlinePayment,
+  payOrderOnInvoice,
+  downloadInvoicePdf,
+} from '../api/orders';
 import { saveBlobResponse, blobErrorMessage } from '../utils/downloadFile';
 import { invoiceLabel, isInvoice, saleTitle } from '../utils/invoiceNumber';
 import { COMPANY } from '../utils/pdfShared';
@@ -16,9 +23,28 @@ import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import TotalsSummary from '../components/ui/TotalsSummary';
 import DiscountNote from '../components/ui/DiscountNote';
-import PayfastRedirectForm from '../components/PayfastRedirectForm';
 
 const POLL_MS = 5000;
+
+// What the customer sees on landing back from Paystack, by what the API
+// found when it asked Paystack.
+const RETURN_NOTES = {
+  paid: { tone: 'good', text: 'Payment received, thank you. Your receipt is ready below.' },
+  needs_review: {
+    tone: 'warn',
+    text: "We've received your payment and our team is checking it. We'll be in touch if anything is needed.",
+  },
+  not_paid: { tone: 'bad', text: "The payment wasn't completed, so nothing was taken. You can try Pay now again." },
+  unknown: {
+    tone: 'warn',
+    text: "We're waiting for Paystack to confirm your payment. Refresh this page in a minute or two.",
+  },
+};
+const NOTE_STYLES = {
+  good: 'bg-good-50 text-good-500',
+  warn: 'bg-amber-50 text-amber-700',
+  bad: 'bg-bad-50 text-bad-500',
+};
 
 // Counts down a plain number of seconds the *server* already computed
 // (orderController.js's withReservationSecondsRemaining), rather than
@@ -59,7 +85,9 @@ export default function OrderDetailPage() {
   const { user } = useAuth();
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [payfastCheckout, setPayfastCheckout] = useState(null);
+  const [returnNote, setReturnNote] = useState(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const paystackReference = searchParams.get('reference');
   const [redirecting, setRedirecting] = useState(false);
   const [switchingToInvoice, setSwitchingToInvoice] = useState(false);
   const [error, setError] = useState('');
@@ -71,6 +99,18 @@ export default function OrderDetailPage() {
     load().finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  // Back from Paystack: it adds ?reference=... to this page. Ask the API to
+  // check that payment with Paystack, then show the result and reload.
+  useEffect(() => {
+    if (!paystackReference) return;
+    setSearchParams({}, { replace: true });
+    confirmOnlinePayment(id, paystackReference)
+      .then(({ data }) => setReturnNote(RETURN_NOTES[data.outcome] || RETURN_NOTES.unknown))
+      .catch(() => setReturnNote(RETURN_NOTES.unknown))
+      .finally(() => load());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, paystackReference]);
 
   // Only worth polling while something's actually still moving -- once the
   // order settles (confirmed, cancelled, ready, etc.) there's nothing left
@@ -106,12 +146,12 @@ export default function OrderDetailPage() {
   const isApproved = order.status === 'approved';
   // Made by staff from a quote: a tax invoice (INV- number), same order underneath.
   const invoice = isInvoice(order);
-  // PayFast is the only way a customer can pay themselves. Both of these
-  // have their stock set aside: reserved at checkout, or approved (by staff,
-  // or when stock the order was waiting for arrived). An approved order can
-  // also still be paid by EFT, which staff record.
-  const canPayOnline = (isStockReserved || isApproved) && !activePayment;
+  // Paystack is how a customer pays themselves, for anything with its stock
+  // set aside: reserved at checkout, approved (by staff, or when stock the
+  // order was waiting for arrived), or invoiced and waiting for payment.
+  // These can also be paid by EFT, which staff record.
   const isOnAccount = order.status === 'awaiting_payment';
+  const canPayOnline = (isStockReserved || isApproved || isOnAccount) && !activePayment;
   const awaitingOfflinePayment = isOnAccount && !activePayment;
   // An order waiting for approval because some items aren't in stock.
   const shortLines = (order.order_items || [])
@@ -146,19 +186,19 @@ export default function OrderDetailPage() {
     }
   };
 
-  const handlePayfastRetry = async () => {
+  // Off to Paystack's payment page; it sends the customer back here.
+  const handlePayOnline = async () => {
+    setError('');
+    setReturnNote(null);
     setRedirecting(true);
     try {
-      const { data } = await initiatePayfastPayment(order.id);
-      setPayfastCheckout(data);
-    } finally {
+      const { data } = await startOnlinePayment(order.id);
+      window.location.assign(data.url);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Could not start the payment. Please try again.');
       setRedirecting(false);
     }
   };
-
-  if (payfastCheckout) {
-    return <PayfastRedirectForm action={payfastCheckout.action} fields={payfastCheckout.fields} />;
-  }
 
   return (
     <div>
@@ -180,6 +220,10 @@ export default function OrderDetailPage() {
         </div>
         <StatusBadge status={orderDisplayStatus(order)} />
       </div>
+
+      {returnNote && (
+        <p className={`mt-4 rounded-lg px-3 py-2 text-sm ${NOTE_STYLES[returnNote.tone]}`}>{returnNote.text}</p>
+      )}
 
       <Card className="mt-6 overflow-x-auto">
         <table className="w-full min-w-[640px] text-sm">
@@ -245,8 +289,8 @@ export default function OrderDetailPage() {
         <Card className="mt-6 p-4">
           <p className="text-sm text-slate-600">
             {invoice
-              ? `${saleTitle(order)} is ready and its stock is set aside. Choose Pay now to pay with PayFast (card or Instant EFT), or pay by EFT using ${invoiceLabel(order.invoice_number)} as the reference`
-              : 'Your order is approved and its stock is set aside. Choose Pay now to pay with PayFast (card or Instant EFT)'}
+              ? `${saleTitle(order)} is ready and its stock is set aside. Choose Pay now to pay online with Paystack, or pay by EFT using ${invoiceLabel(order.invoice_number)} as the reference`
+              : 'Your order is approved and its stock is set aside. Choose Pay now to pay online with Paystack'}
             {order.payment_due_at
               ? `. Please pay by ${formatDate(order.payment_due_at)}: after that the stock goes to the next customer.`
               : '.'}
@@ -274,8 +318,8 @@ export default function OrderDetailPage() {
       {awaitingOfflinePayment && (
         <Card className="mt-6 p-4">
           <p className="text-sm text-slate-600">
-            This order is placed on account and your stock is set aside. Payment is due on invoice — your receipt
-            appears here as soon as it reflects.
+            This order is placed on account and your stock is set aside. Choose Pay now to pay online, or pay by
+            EFT — your receipt appears here as soon as it reflects.
           </p>
         </Card>
       )}
@@ -301,7 +345,7 @@ export default function OrderDetailPage() {
           )}
           {error && <p className="text-sm text-bad-500">{error}</p>}
           {/* An invoice is already invoiced: paying by EFT needs no switch. */}
-          {canPayOnline && user?.can_order_on_account && !invoice && (
+          {canPayOnline && !isOnAccount && user?.can_order_on_account && !invoice && (
             <Button
               variant="secondary"
               onClick={handlePayOnInvoice}
@@ -312,7 +356,7 @@ export default function OrderDetailPage() {
             </Button>
           )}
           {canPayOnline && (
-            <Button onClick={handlePayfastRetry} loading={redirecting} disabled={switchingToInvoice}>
+            <Button onClick={handlePayOnline} loading={redirecting} disabled={switchingToInvoice}>
               Pay now
             </Button>
           )}

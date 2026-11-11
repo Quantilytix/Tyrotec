@@ -3,7 +3,7 @@ const { listPendingReviews, resolveReview } = require('../services/adminReviewSe
 const { logActivity } = require('../services/activityLogService');
 
 // Admin/sales_rep only: the exception queue -- everything the automated
-// PayFast/stock-reservation path couldn't handle on its own (stock_short,
+// Paystack/stock-reservation path couldn't handle on its own (stock_short,
 // high_value, new_customer), worked independently of the existing admin
 // Orders/Payments pages.
 const getReviews = asyncHandler(async (req, res) => {

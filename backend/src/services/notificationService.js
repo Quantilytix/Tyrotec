@@ -119,7 +119,7 @@ function isEmailConfigured() {
 // Neither is awaited: a real SMTP send (Gmail included) takes several
 // seconds and a WhatsApp Graph API call is its own network round trip, and
 // every caller of notifyUser sits in the middle of a latency-sensitive
-// request -- a WhatsApp webhook reply, a PayFast ITN response, an admin
+// request -- a WhatsApp webhook reply, a Paystack webhook response, an admin
 // action's response. Blocking any of those on a side-channel message nobody
 // is synchronously waiting on made every one of them feel sluggish for no
 // benefit; both sendEmail and sendText already swallow their own errors, so

@@ -1,8 +1,8 @@
 import apiClient from './client';
 
 // Staff only -- records money already verified in the bank and marks the
-// order paid in one step. Customers have no equivalent; they pay via PayFast
-// (see initiatePayfastPayment in api/orders.js).
+// order paid in one step. Customers have no equivalent; they pay via Paystack
+// (see startOnlinePayment in api/orders.js).
 export const recordPayment = (payment) => apiClient.post('/payments', payment);
 
 // archived: true lists only the archived payments instead.

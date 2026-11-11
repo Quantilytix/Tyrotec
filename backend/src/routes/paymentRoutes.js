@@ -18,7 +18,7 @@ const recordPaymentRules = [
   body('notify_customer').optional().isBoolean().withMessage('notify_customer must be true or false').toBoolean(true),
 ];
 
-// Staff only. Customers pay through PayFast (POST /orders/:id/pay) and have
+// Staff only. Customers pay through Paystack (POST /orders/:id/pay) and have
 // no route for declaring their own payment -- see paymentService.js.
 router.post(
   '/',

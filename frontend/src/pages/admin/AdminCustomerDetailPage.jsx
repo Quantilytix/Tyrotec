@@ -93,7 +93,7 @@ export default function AdminCustomerDetailPage() {
           <p className="mt-1 max-w-xl text-sm text-slate-500">
             {customer.can_order_on_account
               ? 'This customer can place orders payable on invoice. Stock is committed when they order, and payment is recorded by your team once it reflects.'
-              : 'This customer must pay through PayFast before an order is confirmed. Enable this to let them order on invoice instead.'}
+              : 'This customer must pay before an order is confirmed (online with Paystack, or by EFT). Enable this to let them order on invoice instead.'}
           </p>
           {termsError && <p className="mt-2 text-sm text-bad-500">{termsError}</p>}
         </div>
@@ -113,7 +113,7 @@ export default function AdminCustomerDetailPage() {
           title={customer.can_order_on_account ? 'Stop account ordering?' : 'Allow ordering on account?'}
           message={
             customer.can_order_on_account
-              ? `${customer.company_name || customer.email} will have to pay through PayFast again. Orders already placed on account are unaffected.`
+              ? `${customer.company_name || customer.email} will have to pay up front again. Orders already placed on account are unaffected.`
               : `${customer.company_name || customer.email} will be able to place orders without paying first. Stock is committed immediately and you collect payment on invoice.`
           }
           confirmLabel={customer.can_order_on_account ? 'Disable' : 'Enable'}

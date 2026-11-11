@@ -68,7 +68,7 @@ describe('qxRecords', () => {
   });
 
   it('payment: verified date first', () => {
-    expect(records.paymentRecord({ order_id: 'o', amount: '5', method: 'payfast', gateway: 'payfast', reference: 'PF', status: 'approved',
+    expect(records.paymentRecord({ order_id: 'o', amount: '5', method: 'paystack', gateway: 'paystack', reference: 'PF', status: 'approved',
       verified_at: '2026-10-03T23:00:00Z', created_at: '2026-10-01T10:00:00Z' }).date).toBe('2026-10-04');
   });
 });

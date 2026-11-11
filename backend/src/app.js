@@ -12,7 +12,7 @@ const paymentRoutes = require('./routes/paymentRoutes');
 const customerRoutes = require('./routes/customerRoutes');
 const analyticsRoutes = require('./routes/analyticsRoutes');
 const whatsappRoutes = require('./routes/whatsappRoutes');
-const payfastRoutes = require('./routes/payfastRoutes');
+const paystackRoutes = require('./routes/paystackRoutes');
 const adminReviewRoutes = require('./routes/adminReviewRoutes');
 const activityLogRoutes = require('./routes/activityLogRoutes');
 const staffRoutes = require('./routes/staffRoutes');
@@ -44,7 +44,7 @@ app.set('trust proxy', 1);
 // Browser origins allowed to call this API, comma-separated (the deployed
 // frontend URL, e.g. https://portal.tyrotec.co.za). Left unset, any origin is
 // allowed -- convenient for local development, but set it in production.
-// Server-to-server callers (the PayFast ITN, Meta's WhatsApp webhook) send no
+// Server-to-server callers (Paystack's webhook, Meta's WhatsApp webhook) send no
 // Origin header, so they're unaffected either way.
 const allowedOrigins = (process.env.CORS_ORIGINS || '')
   .split(',')
@@ -64,14 +64,8 @@ app.use(cors(allowedOrigins.length > 0 ? { origin: allowedOrigins } : undefined)
 // already-consumed stream instead of double-parsing it.
 app.use('/api/whatsapp/webhook', express.json({ verify: (req, res, buf) => { req.rawBody = buf; } }));
 
-// Same reasoning as the WhatsApp webhook above, but PayFast's ITN posts
-// application/x-www-form-urlencoded, not JSON, so this needs express's
-// urlencoded parser instead -- and payfastService's signature check needs
-// the exact raw bytes PayFast signed, not a re-serialized copy.
-app.use(
-  '/api/payments/payfast/notify',
-  express.urlencoded({ extended: false, verify: (req, res, buf) => { req.rawBody = buf; } })
-);
+// Same for Paystack's webhook: its signature is over the exact raw bytes.
+app.use('/api/payments/paystack/webhook', express.json({ verify: (req, res, buf) => { req.rawBody = buf; } }));
 app.use(express.json());
 // Send changes to QX soon after they're made (services/qxSyncService.js).
 app.use(syncSoonAfterChanges);
@@ -82,7 +76,7 @@ app.use('/api/products', productRoutes);
 app.use('/api/quotes', quoteRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/notifications', notificationRoutes);
-app.use('/api/payments/payfast', payfastRoutes);
+app.use('/api/payments/paystack', paystackRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/customers', customerRoutes);
 app.use('/api/analytics', analyticsRoutes);
@@ -107,16 +101,13 @@ app.use(errorHandler);
 
 // Not required to boot (config/supabase.js already refuses to start without
 // the Supabase keys), but each one silently disables a feature when missing --
-// a PayFast checkout with no return URL, emails never sent -- so say so loudly
+// no online payments, emails never sent -- so say so loudly
 // in the deploy log instead of finding out from a customer.
 const EXPECTED_ENV = [
   'FRONTEND_URL',
   'BACKEND_URL',
   'CORS_ORIGINS',
-  'PAYFAST_MERCHANT_ID',
-  'PAYFAST_MERCHANT_KEY',
-  'PAYFAST_RETURN_URL',
-  'PAYFAST_CANCEL_URL',
+  'PAYSTACK_SECRET_KEY',
   'WHATSAPP_ACCESS_TOKEN',
   'WHATSAPP_PHONE_NUMBER_ID',
   'WHATSAPP_APP_SECRET',
@@ -162,8 +153,8 @@ const server = app.listen(PORT, () => {
 });
 
 // Render sends SIGTERM to the old instance once a new deploy is live. Stop
-// taking new connections but let in-flight requests finish -- a PayFast ITN
-// cut off halfway would leave PayFast retrying a half-processed payment.
+// taking new connections but let in-flight requests finish -- a Paystack webhook
+// cut off halfway would leave Paystack retrying a half-processed payment.
 process.on('SIGTERM', () => {
   server.close(() => process.exit(0));
 });

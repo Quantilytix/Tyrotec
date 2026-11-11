@@ -2,7 +2,7 @@
 // Orders/Invoices lists, so both offer the same steps.
 
 // Status steps from each stored status. Deliberately absent: anything that
-// moves an order to 'confirmed' (paid) -- that takes a verified PayFast
+// moves an order to 'confirmed' (paid) -- that takes a verified Paystack
 // payment or a recorded one, never a picked status -- and 'stock_reserved' /
 // 'awaiting_payment', which checkout sets.
 export const STATUS_MOVES = {

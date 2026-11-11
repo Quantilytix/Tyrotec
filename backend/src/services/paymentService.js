@@ -5,7 +5,7 @@ const { saleLabel } = require('../utils/invoiceNumber');
 
 // Payments reach this system two ways, and only two:
 //
-//   1. PayFast, verified by the ITN webhook (payfastWebhookController.js) --
+//   1. Paystack, verified with Paystack itself (onlinePaymentService.js) --
 //      the customer's only self-service route.
 //   2. A staff member recording money they have already seen land in the
 //      bank (recordStaffPayment, below) -- EFT, cash on collection, a
@@ -22,7 +22,7 @@ const PAYABLE_STATUSES = ['approved', 'stock_reserved', 'awaiting_payment'];
 // The order states a recorded payment moves *to*. Both legal transitions are
 // declared in orderStateService.js; going through transitionOrderStatus()
 // rather than writing orders.status directly keeps this path under the same
-// single gatekeeper as the PayFast webhook and the admin dropdown.
+// single gatekeeper as the Paystack webhook and the admin dropdown.
 const PAID_STATUS = 'confirmed';
 
 // An order still awaiting approval -- usually waiting for stock -- can be paid
@@ -162,7 +162,7 @@ async function recordStaffPayment(orderId, reviewerId, { method, reference, amou
 
 // Approve or reject a payment that is still sitting as 'submitted'. Nothing
 // in the app creates those any more -- recordStaffPayment writes straight to
-// 'approved', and the PayFast webhook only leaves 'submitted' behind for a
+// 'approved', and the Paystack webhook only leaves 'submitted' behind for a
 // gateway payment that came back pending/failed/short. This stays so those
 // gateway edge cases, and any row predating this change, can still be closed
 // out from the Payments page.
@@ -192,7 +192,7 @@ async function reviewPayment(paymentId, status, reviewerId) {
   if (status === 'approved') {
     // Same "the order must follow the money" rule as recordStaffPayment.
     // Best-effort here rather than an error: the order may legitimately have
-    // moved on already (a stock_reserved order whose PayFast ITN landed
+    // moved on already (a stock_reserved order whose Paystack webhook landed
     // first, say), in which case there is nothing to move and nothing wrong.
     if (PAYABLE_STATUSES.includes(payment.orders?.status)) {
       const transition = await transitionOrderStatus(payment.order_id, PAID_STATUS);

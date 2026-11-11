@@ -76,7 +76,7 @@ const setPaymentArchived = asyncHandler(async (req, res) => {
 });
 
 // Admin/sales_rep only. Only a 'submitted' payment can be approved/rejected,
-// and nothing creates those any more except a PayFast payment that came back
+// and nothing creates those any more except a Paystack payment that came back
 // pending, failed or short -- this is how those get closed out.
 const updatePaymentStatus = asyncHandler(async (req, res) => {
   const { id } = req.params;

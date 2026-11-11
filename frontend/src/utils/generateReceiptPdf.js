@@ -31,7 +31,7 @@ import {
 // (same header, panels, table and footer from pdfShared.js) but laid out the
 // way a receipt reads: what was paid, how, when, and that nothing is owed.
 
-// Orders a receipt can be downloaded for: paid via PayFast (confirmed), then
+// Orders a receipt can be downloaded for: paid via Paystack (confirmed), then
 // ready for collection, or finished through the manual flow (completed).
 export const RECEIPT_STATUSES = ['confirmed', 'ready_for_collection', 'completed'];
 
@@ -40,9 +40,9 @@ export const RECEIPT_STATUSES = ['confirmed', 'ready_for_collection', 'completed
 export const VAT_RATE = 0.15;
 
 // Keep in step with the methods RecordPaymentForm.jsx offers, plus
-// 'payfast', which only the gateway webhook ever writes.
+// 'paystack', which only a verified online payment ever writes.
 const METHOD_LABELS = {
-  payfast: 'PayFast (online payment)',
+  paystack: 'Paystack (online payment)',
   bank_transfer: 'Bank transfer / EFT',
   cash: 'Cash',
   card_machine: 'Card machine',
@@ -108,7 +108,7 @@ function drawReceiptMeta(doc, { order, payment, totals }) {
 }
 
 // Label on the left, value on the left at a fixed indent -- the "Payment
-// method: PayFast" rows under PAYMENT DETAILS.
+// method: Paystack" rows under PAYMENT DETAILS.
 function drawDetailRows(doc, rows, x, y) {
   for (const [label, value] of rows) {
     doc.setFont('helvetica', 'normal');

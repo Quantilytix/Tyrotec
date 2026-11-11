@@ -7,7 +7,6 @@ const {
   exportOrdersAdmin,
   getOrderById,
   updateOrderStatus,
-  initiatePayfastPayment,
   getOrderStatus,
   payOnInvoice,
   updateStockEta,
@@ -15,6 +14,7 @@ const {
   getInvoicePdf,
   emailInvoice,
 } = require('../controllers/orderController');
+const { startPayment, confirmReturn } = require('../controllers/paystackController');
 const { authenticateToken, requireRole } = require('../middleware/auth');
 const validate = require('../middleware/validate');
 
@@ -26,7 +26,10 @@ router.get('/:orderId/status', authenticateToken, getOrderStatus);
 router.get('/:id/invoice-pdf', authenticateToken, getInvoicePdf);
 router.post('/:id/email-invoice', authenticateToken, requireRole(['admin', 'sales_rep']), emailInvoice);
 router.get('/:id', authenticateToken, getOrderById);
-router.post('/:id/pay', authenticateToken, initiatePayfastPayment);
+// Customer only: pay online with Paystack. /pay returns the Paystack page to
+// go to; /pay/confirm checks the payment when they come back.
+router.post('/:id/pay', authenticateToken, requireRole(['customer']), startPayment);
+router.post('/:id/pay/confirm', authenticateToken, requireRole(['customer']), confirmReturn);
 // Customer only, and only for accounts flagged can_order_on_account.
 router.post('/:id/pay-on-invoice', authenticateToken, requireRole(['customer']), payOnInvoice);
 router.patch(
