@@ -15,10 +15,11 @@ const REASONS = [
   { value: 'other', label: 'Other (explain in the note)' },
 ];
 
-// Body of the "Adjust stock" modal (admins). For anything that isn't a
-// purchase or a sale: the reason and the value at average cost are recorded,
-// and the change is posted to the books in QX.
-export default function StockAdjustmentForm({ product, onDone, onCancel }) {
+// Body of the "Adjust stock" modal (admins and sales reps). For anything that
+// isn't a purchase or a sale: the reason and the value at average cost are
+// recorded, and the change is posted to the books in QX. canSetCost: only an
+// admin can value a product that has no cost yet; a rep is told to ask one.
+export default function StockAdjustmentForm({ product, canSetCost = true, onDone, onCancel }) {
   const [direction, setDirection] = useState('remove');
   const [quantity, setQuantity] = useState('');
   const [reason, setReason] = useState('damaged');
@@ -87,7 +88,13 @@ export default function StockAdjustmentForm({ product, onDone, onCancel }) {
         </select>
       </div>
 
-      {needsCost && (
+      {needsCost && !canSetCost && (
+        <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700">
+          This product has no cost yet, so an admin needs to make this adjustment.
+        </p>
+      )}
+
+      {needsCost && canSetCost && (
         <div>
           <label className={LABEL_CLASS}>Unit cost (excl. VAT)</label>
           <input required type="number" min="0" step="0.01" value={unitCost} onChange={(e) => setUnitCost(e.target.value)} className={FIELD_CLASS} />
@@ -114,7 +121,7 @@ export default function StockAdjustmentForm({ product, onDone, onCancel }) {
         <Button type="button" variant="secondary" onClick={onCancel} disabled={saving}>
           Cancel
         </Button>
-        <Button type="submit" loading={saving} disabled={qty <= 0 || newStock < 0}>
+        <Button type="submit" loading={saving} disabled={qty <= 0 || newStock < 0 || (needsCost && !canSetCost)}>
           Save adjustment
         </Button>
       </div>

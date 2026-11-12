@@ -16,7 +16,7 @@ import StockAdjustmentForm from '../../components/admin/StockAdjustmentForm';
 import ProductThumb, { ProductImageViewer } from '../../components/admin/ProductThumb';
 import useCategories from '../../hooks/useCategories';
 import { useAuth } from '../../context/AuthContext';
-import { isAdmin } from '../../utils/roles';
+import { isAdmin, isStaff } from '../../utils/roles';
 import Pagination from '../../components/ui/Pagination';
 
 export default function AdminProductsPage() {
@@ -29,7 +29,10 @@ export default function AdminProductsPage() {
   const limit = 20;
   const { categories, addCategory, removeCategory } = useCategories();
   const { user } = useAuth();
-  const canAdjustStock = isAdmin(user?.role);
+  // Sales reps adjust quantities too (damaged, lost, count corrections);
+  // setting a cost and correcting stock/average cost stay with admins.
+  const canAdjustStock = isStaff(user?.role);
+  const canCorrectStock = isAdmin(user?.role);
 
   const [modalMode, setModalMode] = useState(null); // null | 'create' | 'edit' | 'import' | 'supplier' | 'categories' | 'adjust'
   const [editingProduct, setEditingProduct] = useState(null);
@@ -266,7 +269,7 @@ export default function AdminProductsPage() {
             onCancel={closeModal}
             categories={categories}
             onCreateCategory={addCategory}
-            canCorrectStock={canAdjustStock}
+            canCorrectStock={canCorrectStock}
             onStockCorrected={load}
           />
         </Modal>
@@ -330,7 +333,12 @@ export default function AdminProductsPage() {
 
       {modalMode === 'adjust' && editingProduct && (
         <Modal title="Adjust stock" onClose={closeModal}>
-          <StockAdjustmentForm product={editingProduct} onDone={handleAdjusted} onCancel={closeModal} />
+          <StockAdjustmentForm
+            product={editingProduct}
+            canSetCost={canCorrectStock}
+            onDone={handleAdjusted}
+            onCancel={closeModal}
+          />
         </Modal>
       )}
 

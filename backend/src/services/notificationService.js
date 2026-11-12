@@ -148,11 +148,13 @@ async function notifyUser({ userId, type, title, message, relatedType, relatedId
 // fire-and-forget reasoning as notifyUser above -- the in-app notification
 // insert is awaited (it's what other admins/sales_reps actually see), the
 // emails are not.
-async function notifyInternalTeam({ type, title, message, relatedType, relatedId }) {
+// roles: who on the team hears about it (all staff unless narrowed, e.g. to
+// admins for something a sales rep did).
+async function notifyInternalTeam({ type, title, message, relatedType, relatedId, roles = STAFF_ROLES }) {
   const { data: staff, error } = await supabase
     .from('users')
     .select('id, email')
-    .in('role', STAFF_ROLES);
+    .in('role', roles);
 
   if (error) {
     console.error('Failed to load internal team for notification:', error.message);

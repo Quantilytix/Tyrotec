@@ -7,6 +7,8 @@ const {
   validateAdjustmentInput, adjustStock, recordOpeningStock, validateCorrectionInput, correctStockAndCost,
 } = require('../services/stockService');
 const { notifyStockArrivalsSoon } = require('../services/waitingOrderService');
+const { notifyInternalTeam } = require('../services/notificationService');
+const { satisfiesRole } = require('../utils/roles');
 
 const REASON_LABELS = {
   damaged: 'Damaged',
@@ -34,13 +36,24 @@ const listAdjustments = asyncHandler(async (req, res) => {
   return res.json({ data, page: pageNum, limit: limitNum, total: count });
 });
 
-// Admin. Damaged, lost, count corrections...: anything that isn't a purchase or a sale.
+// Admin or sales rep. Damaged, lost, count corrections...: anything that isn't
+// a purchase or a sale. A rep changes quantities only: the cost a new
+// product's stock is valued at is an admin's call, and admins hear about
+// every adjustment a rep makes.
 const createAdjustment = asyncHandler(async (req, res) => {
   const { value, error: invalid } = validateAdjustmentInput(req.body);
   if (invalid) return res.status(400).json({ error: invalid });
 
+  const byRep = !satisfiesRole(req.user.role, ['admin']);
+  if (byRep) value.unit_cost = null;
+
   const result = await adjustStock(value, req.user.id);
-  if (result.error) return res.status(result.status).json({ error: result.error });
+  if (result.error) {
+    const needsCost = byRep && /has no cost yet/.test(result.error);
+    return res.status(result.status).json({
+      error: needsCost ? "This product has no cost yet, so an admin needs to make this adjustment." : result.error,
+    });
+  }
   // Stock added may have gone to orders that were waiting for it.
   if (value.quantity_change > 0) notifyStockArrivalsSoon();
 
@@ -53,15 +66,26 @@ const createAdjustment = asyncHandler(async (req, res) => {
   if (data?.product) {
     await notifyIfLowStockCrossing(data.stock_before, data.product);
   }
+  const description = `Adjusted stock of ${data?.product?.name ?? 'product'} (${data?.product?.sku ?? ''}) by ` +
+    `${value.quantity_change > 0 ? '+' : ''}${value.quantity_change} (${REASON_LABELS[value.reason]}): ` +
+    `${data?.stock_before} -> ${data?.stock_after}, valued at ${formatCurrency(Math.abs(value.quantity_change) * Number(data?.unit_cost || 0))}` +
+    `${value.note ? `. Note: ${value.note}` : ''}.`;
   await logForUser(req.user, {
     action: 'stock.adjusted',
     entityType: 'product',
     entityId: value.product_id,
-    description: `Adjusted stock of ${data?.product?.name ?? 'product'} (${data?.product?.sku ?? ''}) by ` +
-      `${value.quantity_change > 0 ? '+' : ''}${value.quantity_change} (${REASON_LABELS[value.reason]}): ` +
-      `${data?.stock_before} -> ${data?.stock_after}, valued at ${formatCurrency(Math.abs(value.quantity_change) * Number(data?.unit_cost || 0))}` +
-      `${value.note ? `. Note: ${value.note}` : ''}.`,
+    description,
   });
+  if (byRep) {
+    await notifyInternalTeam({
+      type: 'general',
+      title: 'Stock adjusted by a sales rep',
+      message: `${req.user.full_name || req.user.email}: ${description}`,
+      relatedType: 'product',
+      relatedId: value.product_id,
+      roles: ['admin', 'super_admin'],
+    });
+  }
 
   const { product, ...adjustment } = data || {};
   return res.status(201).json({ ...adjustment, product: product ? { sku: product.sku, name: product.name } : null });
