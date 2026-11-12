@@ -10,7 +10,7 @@ import Pagination from '../../components/ui/Pagination';
 import ActionMenu from '../../components/ui/ActionMenu';
 import DeleteToBinDialog from '../../components/admin/DeleteToBinDialog';
 import { useAuth } from '../../context/AuthContext';
-import { isAdmin } from '../../utils/roles';
+import { isStaff } from '../../utils/roles';
 
 // "2 × Wire rope, +1 more": what a purchase brought in, at a glance. The
 // purchase's own page has every line, quantity and cost.
@@ -23,7 +23,8 @@ function itemsSummary(items = []) {
 export default function AdminPurchasesPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const canDelete = isAdmin(user?.role);
+  // Admins and sales reps (admins are told about a rep's deletes; only admins restore).
+  const canDelete = isStaff(user?.role);
   const [deleting, setDeleting] = useState(null); // purchase | null
   const [notice, setNotice] = useState(null); // { ok, text } | null
   const [purchases, setPurchases] = useState([]);

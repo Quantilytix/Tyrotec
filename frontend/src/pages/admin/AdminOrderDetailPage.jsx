@@ -21,6 +21,7 @@ import RecordPaymentForm from '../../components/RecordPaymentForm';
 import ReceiveStockForm from '../../components/admin/ReceiveStockForm';
 import ActionMenu from '../../components/ui/ActionMenu';
 import { CANCELLABLE, activePaymentOf, canRecordPayment as canTakePayment, shortLinesOf, statusMovesFor } from '../../utils/orderActions';
+import InBinNotice from '../../components/admin/InBinNotice';
 
 // ?action= from the Orders/Invoices lists' Actions menu: open that form.
 const LINKED_ACTIONS = ['record-payment', 'receive-stock'];
@@ -247,13 +248,7 @@ export default function AdminOrderDetailPage() {
       </div>
 
       {inBin && (
-        <p className="mt-4 rounded-lg bg-bad-50 px-3 py-2 text-sm text-bad-500">
-          This {invoice ? 'invoice' : 'order'} is in{' '}
-          <Link to="/admin/recently-deleted" className="font-medium underline">
-            Recently deleted
-          </Link>
-          . Restore it there to work on it again.
-        </p>
+        <InBinNotice subject={`This ${invoice ? 'invoice' : 'order'}`} restoreHint="Restore it there to work on it again." />
       )}
 
       <Card className="mt-6 overflow-x-auto">

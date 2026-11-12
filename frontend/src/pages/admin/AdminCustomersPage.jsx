@@ -13,7 +13,7 @@ import ActionMenu from '../../components/ui/ActionMenu';
 import NewCustomerForm from '../../components/admin/NewCustomerForm';
 import DeleteToBinDialog from '../../components/admin/DeleteToBinDialog';
 import { useAuth } from '../../context/AuthContext';
-import { isAdmin } from '../../utils/roles';
+import { isStaff } from '../../utils/roles';
 
 export default function AdminCustomersPage() {
   const [customers, setCustomers] = useState([]);
@@ -29,7 +29,8 @@ export default function AdminCustomersPage() {
   const limit = 20;
   const navigate = useNavigate();
   const { user } = useAuth();
-  const canDelete = isAdmin(user?.role);
+  // Admins and sales reps (admins are told about a rep's deletes; only admins restore).
+  const canDelete = isStaff(user?.role);
 
   useEffect(() => {
     const timeout = setTimeout(() => {

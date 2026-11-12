@@ -5,6 +5,7 @@ import { formatCurrency, formatDate, formatDay } from '../../utils/formatters';
 import Spinner from '../../components/ui/Spinner';
 import EmptyState from '../../components/ui/EmptyState';
 import Card from '../../components/ui/Card';
+import InBinNotice from '../../components/admin/InBinNotice';
 
 export default function AdminPurchaseDetailPage() {
   const { id } = useParams();
@@ -30,13 +31,12 @@ export default function AdminPurchaseDetailPage() {
       </Link>
       <h1 className="mt-1 font-display text-xl font-semibold text-ink">Purchase #{purchase.purchase_number}</h1>
       {purchase.deleted_at && (
-        <p className="mt-3 rounded-lg bg-bad-50 px-3 py-2 text-sm text-bad-500">
-          This purchase is in{' '}
-          <Link to="/admin/recently-deleted" className="font-medium underline">
-            Recently deleted
-          </Link>
-          : its stock was taken back off. Restore it there to put it back.
-        </p>
+        <InBinNotice
+          className="mt-3"
+          subject="This purchase"
+          detail=": its stock was taken back off."
+          restoreHint="Restore it there to put it back."
+        />
       )}
       <p className="mt-1 text-sm text-slate-500">
         Received {formatDay(purchase.purchase_date)} from {purchase.supplier?.name}

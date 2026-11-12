@@ -6,7 +6,7 @@ import ActionMenu from '../../components/ui/ActionMenu';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import DeleteToBinDialog from '../../components/admin/DeleteToBinDialog';
 import { useAuth } from '../../context/AuthContext';
-import { isAdmin } from '../../utils/roles';
+import { isStaff } from '../../utils/roles';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { saveBlobResponse, blobErrorMessage } from '../../utils/downloadFile';
 import { isWithinDateRange } from '../../utils/dateRange';
@@ -35,7 +35,8 @@ export default function AdminQuotesPage() {
   const [deleting, setDeleting] = useState(null); // quote | null
   const navigate = useNavigate();
   const { user } = useAuth();
-  const canDelete = isAdmin(user?.role);
+  // Admins and sales reps (admins are told about a rep's deletes; only admins restore).
+  const canDelete = isStaff(user?.role);
 
   useEffect(() => {
     getAllQuotesAdmin()

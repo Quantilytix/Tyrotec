@@ -12,6 +12,7 @@ import Card from '../../components/ui/Card';
 import TotalsSummary from '../../components/ui/TotalsSummary';
 import DiscountNote from '../../components/ui/DiscountNote';
 import QuoteItemsEditor from '../../components/QuoteItemsEditor';
+import InBinNotice from '../../components/admin/InBinNotice';
 
 export default function AdminQuoteDetailPage() {
   const { quoteId } = useParams();
@@ -129,15 +130,7 @@ export default function AdminQuoteDetailPage() {
         ← Back to quotes
       </Link>
 
-      {inBin && (
-        <p className="mt-4 rounded-lg bg-bad-50 px-3 py-2 text-sm text-bad-500">
-          This quote is in{' '}
-          <Link to="/admin/recently-deleted" className="font-medium underline">
-            Recently deleted
-          </Link>
-          . Restore it there to work on it again.
-        </p>
-      )}
+      {inBin && <InBinNotice subject="This quote" restoreHint="Restore it there to work on it again." />}
 
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
         <div>

@@ -1,9 +1,12 @@
 const asyncHandler = require('../utils/asyncHandler');
 const { logForUser } = require('../services/activityLogService');
+const { notifyInternalTeam } = require('../services/notificationService');
+const { satisfiesRole } = require('../utils/roles');
 const { deleteRecord, restoreRecord, listRecentlyDeleted, purgeRecentlyDeleted } = require('../services/recentlyDeletedService');
 
-// Admin only (the routes). See recentlyDeletedService.js for what each kind
-// can be, and what happens after 30 days.
+// Deleting: admins and sales reps; the list and restoring: admins (the
+// routes). See recentlyDeletedService.js for what each kind can be, and what
+// happens after 30 days.
 
 // The page. Clears out what's past its 30 days first, so that happens even
 // where the background jobs don't run.
@@ -21,12 +24,24 @@ const deleteToBin = asyncHandler(async (req, res) => {
   const result = await deleteRecord(type, id, req.user.id);
   if (result.error) return res.status(result.status).json({ error: result.error });
 
+  const description = `Deleted ${result.name}${result.cancelled ? ', cancelling it first' : ''}. It's in Recently deleted for 30 days.`;
   await logForUser(req.user, {
     action: `${type}.deleted`,
     entityType: type,
     entityId: id,
-    description: `Deleted ${result.name}${result.cancelled ? ', cancelling it first' : ''}. It's in Recently deleted for 30 days.`,
+    description,
   });
+  // Admins hear about whatever a sales rep deletes, and can restore it.
+  if (!satisfiesRole(req.user.role, ['admin'])) {
+    await notifyInternalTeam({
+      type: 'general',
+      title: 'Deleted by a sales rep',
+      message: `${req.user.full_name || req.user.email}: ${description} Restore it from Recently deleted if it shouldn't have gone.`,
+      relatedType: type,
+      relatedId: id,
+      roles: ['admin', 'super_admin'],
+    });
+  }
   return res.json({ message: 'Moved to Recently deleted', ...result });
 });
 
