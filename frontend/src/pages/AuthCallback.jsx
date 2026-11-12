@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import supabase from '../lib/supabaseClient';
 import Spinner from '../components/ui/Spinner';
+import { takeNext } from '../utils/afterLogin';
 import AuthLayout from '../components/layout/AuthLayout';
 
 // Google redirects here (via Supabase) after the consent screen. By the time
@@ -24,7 +25,8 @@ export default function AuthCallback() {
       }
       try {
         await completeOAuthLogin(session);
-        navigate('/');
+        // Back to where they were before Google, e.g. the quote builder.
+        navigate(takeNext() || '/');
       } catch (err) {
         setError(err.response?.data?.error || 'Could not complete Google sign-in.');
       }

@@ -1,9 +1,11 @@
-import { useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { loginPathFor, registerPathFor } from '../../utils/afterLogin';
 
 export default function Topbar({ onMenuClick = () => {} }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const { pathname, search } = useLocation();
 
   const handleLogout = () => {
     logout();
@@ -27,6 +29,25 @@ export default function Topbar({ onMenuClick = () => {} }) {
         </svg>
       </button>
 
+      {/* Browsing without an account: the way in, and back to this page after. */}
+      {!user && (
+        <div className="flex items-center gap-2">
+          <Link
+            to={loginPathFor(pathname + search)}
+            className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 transition-colors duration-150 hover:bg-slate-50"
+          >
+            Log in
+          </Link>
+          <Link
+            to={registerPathFor(pathname + search)}
+            className="rounded-lg bg-teal-500 px-3 py-1.5 text-xs font-medium text-white transition-colors duration-150 hover:bg-teal-600"
+          >
+            Create account
+          </Link>
+        </div>
+      )}
+
+      {user && (
       <div className="flex min-w-0 items-center gap-3 sm:gap-4">
         {/* The company name and email are the first things to go when space
             is tight -- the avatar already identifies who is signed in. */}
@@ -44,6 +65,7 @@ export default function Topbar({ onMenuClick = () => {} }) {
           Log out
         </button>
       </div>
+      )}
     </header>
   );
 }

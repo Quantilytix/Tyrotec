@@ -20,6 +20,10 @@
   --color-ink: #10192b;
   --color-canvas: #f5f6f8;
 
+  /* Tyrotec's logo cyan (also the website's accent): the shop front's highlight. */
+  --color-brand: #00a8d9;
+  --color-brand-600: #078db5;
+
   --color-good-50: #ecfdf3;
   --color-good-500: #15803d;
 

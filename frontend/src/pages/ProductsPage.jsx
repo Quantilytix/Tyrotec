@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { getProducts } from '../api/products';
 import useCategories from '../hooks/useCategories';
 import { useCart } from '../context/CartContext';
+import { useAuth } from '../context/AuthContext';
 import { formatCurrency, formatDay } from '../utils/formatters';
 import { availabilityNote } from '../utils/availability';
 import { discountLabel } from '../utils/discounts';
@@ -11,6 +12,7 @@ import EmptyState from '../components/ui/EmptyState';
 import Card from '../components/ui/Card';
 import ProductImageViewer, { PlaceholderIcon } from '../components/ui/ProductImageViewer';
 import Pagination from '../components/ui/Pagination';
+import ShopFront, { pickFeatured, pickSpotlight } from '../components/shop/ShopFront';
 
 export default function ProductsPage() {
   const [products, setProducts] = useState([]);
@@ -26,15 +28,33 @@ export default function ProductsPage() {
   const limit = 20;
   const { categories } = useCategories();
   const { addItem, items } = useCart();
+  const { user } = useAuth();
   const [quantities, setQuantities] = useState({});
   // The product whose full photo is open, or null.
   const [viewing, setViewing] = useState(null);
+  // The shop front's "Featured products": ones with a photo, deals first.
+  const [featured, setFeatured] = useState([]);
+  // The banner's product spotlight: a different random product each visit.
+  const [spotlight, setSpotlight] = useState(null);
+  const pageTop = useRef(null);
+  const gridTop = useRef(null);
 
   // How many products are on discount, for the banner. Hidden when none are.
   useEffect(() => {
     getProducts({ discounted: true, limit: 1 })
       .then(({ data }) => setDealCount(data.total || 0))
       .catch(() => setDealCount(0));
+  }, []);
+
+  useEffect(() => {
+    Promise.all([getProducts({ discounted: true, limit: 20 }), getProducts({ limit: 60 })])
+      .then(([deals, all]) => {
+        const dealList = deals.data.data || [];
+        const allList = all.data.data || [];
+        setFeatured(pickFeatured(dealList, allList));
+        setSpotlight(pickSpotlight([...dealList, ...allList]));
+      })
+      .catch(() => setFeatured([]));
   }, []);
 
   useEffect(() => {
@@ -51,10 +71,24 @@ export default function ProductsPage() {
     return () => clearTimeout(timeout);
   }, [search, category, dealsOnly, page]);
 
-  const showDeals = (on) => {
+  const showDeals = useCallback((on) => {
     setPage(1);
     setDealsOnly(on);
-  };
+  }, []);
+
+  // The shop front is the plain catalogue's welcome: it steps aside once
+  // someone searches, filters or pages on.
+  const showShopFront = !search && !category && !dealsOnly && page === 1;
+  const shopAll = useCallback(() => gridTop.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), []);
+  const viewDeals = useCallback(() => {
+    showDeals(true);
+    pageTop.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [showDeals]);
+  const pickCategory = useCallback((name) => {
+    setPage(1);
+    setCategory(name);
+    pageTop.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, []);
 
   const getQuantity = (product) => quantities[product.id] ?? 1;
 
@@ -91,11 +125,15 @@ export default function ProductsPage() {
   };
 
   return (
-    <div>
+    <div ref={pageTop} className="scroll-mt-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="font-display text-xl font-semibold text-ink">Products</h1>
-          <p className="mt-1 text-sm text-slate-500">Browse the catalog and add items to your quote.</p>
+          <p className="mt-1 text-sm text-slate-500">
+            {user
+              ? 'Browse the catalog and add items to your quote.'
+              : 'Browse the catalog and add items to a quote. Log in or create an account when you’re ready to send it.'}
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <select
@@ -140,7 +178,24 @@ export default function ProductsPage() {
         </div>
       </div>
 
-      {dealCount > 0 && !dealsOnly && (
+      {showShopFront && (
+        <ShopFront
+          user={user}
+          dealCount={dealCount}
+          categories={categories}
+          featured={featured}
+          spotlight={spotlight}
+          onViewDeals={viewDeals}
+          onPickCategory={pickCategory}
+          onShopAll={shopAll}
+          onAdd={(product) => addItem(product, 1)}
+          isInCart={isInCart}
+          onView={setViewing}
+        />
+      )}
+
+      {/* The banner already advertises the deals on the shop front. */}
+      {dealCount > 0 && !dealsOnly && !showShopFront && (
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-good-500/30 bg-good-50 px-4 py-3">
           <p className="text-sm text-good-500">
             <span className="font-semibold">
@@ -161,6 +216,12 @@ export default function ProductsPage() {
         </p>
       )}
 
+      <div ref={gridTop} className="scroll-mt-4">
+        {showShopFront && (
+          <h2 className="mt-8 font-display text-base font-semibold text-ink">All products</h2>
+        )}
+      </div>
+
       {loading ? (
         <Spinner />
       ) : products.length === 0 ? (
@@ -171,7 +232,7 @@ export default function ProductsPage() {
         <>
           {/* Two across on a phone; from tablets up, as many as fit at
               12rem or more each, which is five on a laptop with the menu open. */}
-          <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(12rem,1fr))]">
+          <div className={`${showShopFront ? "mt-3" : "mt-6"} grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fill,minmax(12rem,1fr))]`}>
             {products.map((product) => {
               const note = availabilityNote(product.stock_quantity, getQuantity(product), product.lead_time_days);
               return (
@@ -180,12 +241,13 @@ export default function ProductsPage() {
                   <button
                     type="button"
                     onClick={() => setViewing(product)}
-                    className="relative block aspect-[4/3] w-full cursor-zoom-in border-b border-slate-100 bg-white"
+                    className="relative block aspect-[4/3] w-full shrink-0 cursor-zoom-in border-b border-slate-100 bg-white"
                     aria-label={`View photo of ${product.name}`}
                     title="Click to view"
                   >
                     {product.image_url ? (
-                      <img src={product.image_url} alt={product.name} className="h-full w-full object-contain p-1.5" />
+                      // Absolutely placed so a tall photo is fitted into the slot instead of stretching the card.
+                      <img src={product.image_url} alt={product.name} loading="lazy" className="absolute inset-0 h-full w-full object-contain p-1.5" />
                     ) : (
                       <span className="flex h-full w-full items-center justify-center bg-slate-50 text-slate-300">
                         <PlaceholderIcon className="h-7 w-7" />

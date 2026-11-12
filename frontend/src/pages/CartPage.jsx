@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { createQuote } from '../api/quotes';
+import { loginPathFor, registerPathFor } from '../utils/afterLogin';
 import { formatCurrency } from '../utils/formatters';
 import { lineTotals, vatRateLabel } from '../utils/vat';
 import { downloadQuotePdf } from '../utils/generateQuotePdf';
@@ -72,6 +73,12 @@ export default function CartPage() {
       <p className="mt-1 text-sm text-slate-500">
         Review your items, then request a quote. You confirm the order from the quote.
       </p>
+      {/* A guest's items are kept in this browser while they log in or sign up. */}
+      {!user && (
+        <p className="mt-3 rounded-lg bg-teal-50 px-3 py-2 text-sm text-teal-600">
+          To send this quote to Tyrotec, log in or create a free account. Your items stay here while you do.
+        </p>
+      )}
       {hasShortItems && (
         <p className="mt-2 text-sm text-amber-600">
           Some items aren't in stock right now. You can still request the quote: if you order, your order waits until
@@ -155,9 +162,23 @@ export default function CartPage() {
           >
             Download PDF
           </button>
-          <Button onClick={handleSubmit} loading={submitting}>
-            Request quote
-          </Button>
+          {user ? (
+            <Button onClick={handleSubmit} loading={submitting}>
+              Request quote
+            </Button>
+          ) : (
+            <>
+              <Link
+                to={loginPathFor('/cart')}
+                className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-ink transition-colors duration-150 hover:bg-slate-50"
+              >
+                Log in
+              </Link>
+              <Link to={registerPathFor('/cart')}>
+                <Button>Create account to request quote</Button>
+              </Link>
+            </>
+          )}
         </div>
       </Card>
     </div>

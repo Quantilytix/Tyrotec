@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { CartProvider } from './context/CartContext';
-import ProtectedRoute from './components/ProtectedRoute';
+import ProtectedRoute, { ShopRoute, OpenRoute } from './components/ProtectedRoute';
 import DashboardLayout from './components/layout/DashboardLayout';
 
 import Login from './pages/Login';
@@ -37,17 +37,20 @@ import AdminReviewsPage from './pages/admin/AdminReviewsPage';
 import AdminSuppliersPage from './pages/admin/AdminSuppliersPage';
 import AdminDiscountsPage from './pages/admin/AdminDiscountsPage';
 import HelpPage from './pages/HelpPage';
+import SellPage from './pages/SellPage';
 import AdminPurchasesPage from './pages/admin/AdminPurchasesPage';
 import AdminNewPurchasePage from './pages/admin/AdminNewPurchasePage';
 import AdminPurchaseDetailPage from './pages/admin/AdminPurchaseDetailPage';
 import AdminOpeningStockPage from './pages/admin/AdminOpeningStockPage';
 
 import { STAFF_ROLES, isStaff } from './utils/roles';
+import Spinner from './components/ui/Spinner';
 
-// Staff land on the product catalog they manage; customers land on the one
-// they shop from.
+// Staff land on the product catalog they manage; customers, and visitors
+// without an account, land on the one they shop from.
 function HomeRedirect() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
+  if (loading) return <Spinner className="h-screen" />;
   const target = isStaff(user?.role) ? '/admin/products' : '/products';
   return <Navigate to={target} replace />;
 }
@@ -68,14 +71,30 @@ export default function App() {
             <Route path="/sso/qx" element={<QxSsoPage />} />
             <Route path="/privacy" element={<PrivacyPolicyPage />} />
 
+            {/* No account needed to look around (like a shop window): the
+                catalogue for guests and customers... */}
             <Route
               element={
-                <ProtectedRoute roles={['customer']}>
+                <ShopRoute>
                   <DashboardLayout />
-                </ProtectedRoute>
+                </ShopRoute>
               }
             >
               <Route path="/products" element={<ProductsPage />} />
+            </Route>
+
+            {/* ...and the quote builder, Help and Sell on Tyrotec for anyone.
+                Sending a quote, ordering and paying need an account. */}
+            <Route
+              element={
+                <OpenRoute>
+                  <DashboardLayout />
+                </OpenRoute>
+              }
+            >
+              <Route path="/cart" element={<CartPage />} />
+              <Route path="/help" element={<HelpPage />} />
+              <Route path="/sell" element={<SellPage />} />
             </Route>
 
             <Route
@@ -85,13 +104,11 @@ export default function App() {
                 </ProtectedRoute>
               }
             >
-              <Route path="/cart" element={<CartPage />} />
               <Route path="/quotes" element={<QuotesPage />} />
               <Route path="/quotes/:quoteId" element={<QuoteDetailPage />} />
               <Route path="/orders" element={<OrdersPage />} />
               <Route path="/orders/:id" element={<OrderDetailPage />} />
               <Route path="/notifications" element={<NotificationsPage />} />
-              <Route path="/help" element={<HelpPage />} />
               <Route path="/profile" element={<Profile />} />
             </Route>
 
@@ -138,22 +155,8 @@ export default function App() {
               <Route path="/admin/recently-deleted" element={<AdminRecentlyDeletedPage />} />
             </Route>
 
-            <Route
-              path="/"
-              element={
-                <ProtectedRoute>
-                  <HomeRedirect />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="*"
-              element={
-                <ProtectedRoute>
-                  <HomeRedirect />
-                </ProtectedRoute>
-              }
-            />
+            <Route path="/" element={<HomeRedirect />} />
+            <Route path="*" element={<HomeRedirect />} />
           </Routes>
         </CartProvider>
       </AuthProvider>

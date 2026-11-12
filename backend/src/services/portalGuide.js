@@ -5,6 +5,11 @@
 const PORTAL_GUIDE = `
 HOW THE TYROTEC CUSTOMER PORTAL WORKS
 
+Browsing without an account
+- Anyone can browse the Products page, add items to the Quote builder and ask Help without an account.
+- To request a quote, place an order, pay, or see quotes and orders, log in or create a free account ("Log in" / "Create account" at the top). Items already in the Quote builder are kept, so they can carry on where they left off.
+- "Sell on Tyrotec" is coming soon: suppliers who would like to sell through Tyrotec can register their interest by emailing sales@tyrotec.co.za.
+
 Finding products
 - The Products page lists the catalogue: search by name or SKU, or pick a category. The page picker at the bottom moves between pages.
 - Each product shows its price excluding VAT and whether it is in stock. Click a photo to see it full size.

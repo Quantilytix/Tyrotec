@@ -13,7 +13,7 @@ const {
 } = require('../controllers/productController');
 const { extractProductImport, confirmImport } = require('../controllers/productImportController');
 const { getCategories, createCategory, deleteCategory } = require('../controllers/categoryController');
-const { authenticateToken, requireRole } = require('../middleware/auth');
+const { authenticateToken, optionalAuth, requireRole } = require('../middleware/auth');
 const validate = require('../middleware/validate');
 
 const upload = multer({
@@ -117,8 +117,12 @@ router.post(
 );
 router.post('/import/confirm', authenticateToken, requireRole(['admin', 'sales_rep']), confirmImport);
 
+// Browsing the catalogue needs no account (the portal's guest view, like a
+// shop window): the list, one product and the categories. Guests and
+// customers get the public view only, never supplier details or costs
+// (productController.viewFor); staff signed in still get everything.
 // Before '/:id', or "categories" is read as a product id.
-router.get('/categories', authenticateToken, getCategories);
+router.get('/categories', optionalAuth, getCategories);
 router.post(
   '/categories',
   authenticateToken,
@@ -132,8 +136,8 @@ router.delete('/categories/:id', authenticateToken, requireRole(['admin', 'sales
 // Also before '/:id', same reason as the category routes above.
 router.get('/export', authenticateToken, requireRole(['admin', 'sales_rep']), exportProducts);
 
-router.get('/', authenticateToken, getAllProducts);
-router.get('/:id', authenticateToken, getProductById);
+router.get('/', optionalAuth, getAllProducts);
+router.get('/:id', optionalAuth, getProductById);
 router.post('/', authenticateToken, requireRole(['admin', 'sales_rep']), createProductRules, validate, createProduct);
 router.patch('/:id', authenticateToken, requireRole(['admin', 'sales_rep']), updateProductRules, validate, updateProduct);
 router.delete('/:id', authenticateToken, requireRole(['admin', 'sales_rep']), deleteProduct);

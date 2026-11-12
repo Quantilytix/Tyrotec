@@ -11,7 +11,17 @@ const CUSTOMER_NAV_ITEMS = [
   { to: '/orders', label: 'Orders', icon: TruckIcon },
   { to: '/notifications', label: 'Notifications', icon: BellIcon },
   { to: '/help', label: 'Help', icon: HelpIcon },
+  { to: '/sell', label: 'Sell on Tyrotec', icon: StoreIcon },
   { to: '/profile', label: 'Profile', icon: ProfileIcon },
+];
+
+// Browsing without an account: what needs no login. Quotes, orders and the
+// rest appear once they log in.
+const GUEST_NAV_ITEMS = [
+  { to: '/products', label: 'Products', icon: BoxIcon },
+  { to: '/cart', label: 'Quote builder', icon: CartIcon, showCount: true },
+  { to: '/help', label: 'Help', icon: HelpIcon },
+  { to: '/sell', label: 'Sell on Tyrotec', icon: StoreIcon },
 ];
 
 const STAFF_NAV_ITEMS = [
@@ -50,11 +60,13 @@ export default function Sidebar({ open = false, onClose = () => {} }) {
   }, [pathname]);
   // Staff and admin navigation is rank-based: a super admin sees everything
   // an admin does, without this having to list the role separately.
-  const navItems = isStaff(user?.role)
-    ? isAdmin(user.role)
-      ? [...STAFF_NAV_ITEMS, ...ADMIN_ONLY_NAV_ITEMS]
-      : STAFF_NAV_ITEMS
-    : CUSTOMER_NAV_ITEMS;
+  const navItems = !user
+    ? GUEST_NAV_ITEMS
+    : isStaff(user.role)
+      ? isAdmin(user.role)
+        ? [...STAFF_NAV_ITEMS, ...ADMIN_ONLY_NAV_ITEMS]
+        : STAFF_NAV_ITEMS
+      : CUSTOMER_NAV_ITEMS;
 
   return (
     <>
@@ -151,6 +163,15 @@ function FactoryIcon(props) {
     </svg>
   );
 }
+function StoreIcon(props) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" {...props}>
+      <path d="M4 9l1.5-5h13L20 9M4 9h16M4 9a2.67 2.67 0 0 0 5.33 0 2.67 2.67 0 0 0 5.34 0A2.67 2.67 0 0 0 20 9" strokeLinejoin="round" />
+      <path d="M5 11.5V20h14v-8.5M10 20v-5h4v5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 function HelpIcon(props) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" {...props}>

@@ -1,14 +1,20 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Button from '../components/ui/Button';
 import GoogleButton from '../components/ui/GoogleButton';
 import AuthLayout from '../components/layout/AuthLayout';
 import PasswordInput from '../components/ui/PasswordInput';
+import { rememberNextFromQuery, takeNext } from '../utils/afterLogin';
 
 export default function Register() {
   const { register } = useAuth();
   const navigate = useNavigate();
+  // /register?next=/cart (a guest sent here to send their quote): go back there after.
+  const { search } = useLocation();
+  useEffect(() => {
+    rememberNextFromQuery(search);
+  }, [search]);
   const [companyName, setCompanyName] = useState('');
   const [vatNumber, setVatNumber] = useState('');
   const [isVatRegistered, setIsVatRegistered] = useState(false);
@@ -44,7 +50,7 @@ export default function Register() {
       if (result?.pending) {
         setPendingMessage(result.message);
       } else {
-        navigate('/products');
+        navigate(takeNext() || '/products');
       }
     } catch (err) {
       setError(err.response?.data?.error || 'Something went wrong. Try again.');

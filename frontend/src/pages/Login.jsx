@@ -1,14 +1,20 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Button from '../components/ui/Button';
 import GoogleButton from '../components/ui/GoogleButton';
 import AuthLayout from '../components/layout/AuthLayout';
 import PasswordInput from '../components/ui/PasswordInput';
+import { rememberNextFromQuery, takeNext } from '../utils/afterLogin';
 
 export default function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
+  // /login?next=/cart (a guest sent here to send their quote): go back there after.
+  const { search } = useLocation();
+  useEffect(() => {
+    rememberNextFromQuery(search);
+  }, [search]);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -20,10 +26,10 @@ export default function Login() {
     setLoading(true);
     try {
       await login(email, password);
-      // "/" runs HomeRedirect, which sends staff to /admin/products and
-      // customers to /products -- login isn't customer-only like register,
-      // so it can't hardcode either path.
-      navigate('/');
+      // Back to where they were (e.g. the quote builder), or "/", which runs
+      // HomeRedirect: staff to /admin/products, customers to /products --
+      // login isn't customer-only like register, so it can't hardcode either.
+      navigate(takeNext() || '/');
     } catch (err) {
       setError(err.response?.data?.error || 'Something went wrong. Try again.');
     } finally {
@@ -93,6 +99,11 @@ export default function Login() {
           Don't have an account?{' '}
           <Link to="/register" className="font-medium text-teal-600 hover:underline">
             Create one
+          </Link>
+        </p>
+        <p className="mt-2 text-center text-sm text-slate-500">
+          <Link to="/products" className="font-medium text-teal-600 hover:underline">
+            Browse products without an account
           </Link>
         </p>
       </div>

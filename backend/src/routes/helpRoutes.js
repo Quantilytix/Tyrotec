@@ -1,9 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const { chat } = require('../controllers/helpController');
-const { authenticateToken } = require('../middleware/auth');
+const { optionalAuth } = require('../middleware/auth');
 
-// The Help chat (helpChatService.js): any signed-in user.
-router.post('/chat', authenticateToken, chat);
+// The Help chat (helpChatService.js): anyone, including visitors browsing
+// without an account. Guests have tighter limits (helpController.js).
+router.post('/chat', optionalAuth, chat);
 
 module.exports = router;

@@ -45,6 +45,15 @@ const authenticateToken = async (req, res, next) => {
   }
 };
 
+// For pages a visitor can use without an account (browsing products, Help):
+// no token means a guest (req.user stays undefined); a token is checked
+// exactly as authenticateToken does, so a signed-in caller still gets their
+// own view (staff see costs, customers don't).
+const optionalAuth = (req, res, next) => {
+  if (!req.headers['authorization']) return next();
+  return authenticateToken(req, res, next);
+};
+
 // Roles are ranked (utils/roles.js): requireRole(['admin']) also admits a
 // super admin, without every route having to list both.
 const requireRole = (allowedRoles = []) => {
@@ -56,4 +65,4 @@ const requireRole = (allowedRoles = []) => {
   };
 };
 
-module.exports = { authenticateToken, requireRole };
+module.exports = { authenticateToken, optionalAuth, requireRole };
